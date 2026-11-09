@@ -2,4 +2,4 @@
 "@type32/tasks": minor
 ---
 
-Tasks format 1.0: document schema with lists, built-in and custom fields, recurrence rules, `parse`/`stringify`/`validate` for JSON, YAML and TOML, `merge()` for sync with conflict repair, and `occurrences()` for expanding recurrence across time zones.
+Tasks format 1.0: document schema with lists, built-in and custom fields, recurrence rules, `parse`/`stringify`/`validate` for JSON, YAML and TOML, `merge()` for sync with conflict repair, `occurrences()` for expanding recurrence across time zones, and `toICS`/`fromICS` for iCalendar.

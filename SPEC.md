@@ -200,6 +200,39 @@ Always present. A document may list a built-in field only to add options to it, 
 
 Built-in categories are what other apps rely on: any app knows a task with status `shipped` is done because `shipped` maps to `done`. A task without a status counts as `todo`.
 
+## iCalendar mapping
+
+Informative. How `toICS`/`fromICS` map to RFC 5545; other implementations should map the same way.
+
+A task exports as a **VEVENT** when it has `start`, no `due`, and no status other than `cancelled`; otherwise as a **VTODO**. Deleted tasks are skipped.
+
+| Task                                | iCalendar                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `id`                                | `UID`                                                                                                        |
+| `updatedAt`                         | `LAST-MODIFIED` and `DTSTAMP`. Import prefers `LAST-MODIFIED`; neither → `1970-01-01T00:00:00Z`              |
+| `title`, `notes`, `values.location` | `SUMMARY`, `DESCRIPTION`, `LOCATION`                                                                         |
+| `start`, `due`                      | `DTSTART`, `DUE`, with `VALUE=DATE` for dates and `TZID=<IANA>` from `timeZone`. `timeZone: UTC` writes `…Z` |
+| `end`                               | VEVENT `DTEND`, one day later for dates (iCalendar ends are exclusive). VTODO: `DURATION`                    |
+| `duration`                          | `DURATION`                                                                                                   |
+| status category                     | `STATUS`: todo `NEEDS-ACTION`, doing `IN-PROCESS`, done `COMPLETED`, cancelled `CANCELLED`                   |
+| priority category                   | `PRIORITY`: high 1, medium 5, low 9. Import: 1–4 high, 5 medium, 6–9 low                                     |
+| `values.progress`, `completedAt`    | VTODO `PERCENT-COMPLETE`, `COMPLETED`                                                                        |
+| `values.tags`                       | `CATEGORIES`                                                                                                 |
+| `parentId`                          | `RELATED-TO;RELTYPE=PARENT` (the default `RELTYPE`)                                                          |
+| `dependsOn`                         | `RELATED-TO;RELTYPE=DEPENDS-ON` (RFC 9253). Import also reads `FINISHTOSTART` from the predecessor           |
+| `recurrence`, `excludedDates`       | `RRULE`, `EXDATE`. `UNTIL` is written in UTC when the task has a time zone                                   |
+
+Time zones are referenced by IANA name without `VTIMEZONE` blocks (RFC 7809). On import, every time is converted to the zone of `DTSTART` (or `DUE`).
+
+**Lost on export:** lists, custom fields, custom status and priority options (exported as their category), unknown keys, deleted tasks.
+
+**Dropped on import, and reported:**
+
+- whole components: `RRULE` parts other than `FREQ` (daily to yearly), `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, and `WKST` (`WKST` is dropped only where it changes results); changed occurrences (`RECURRENCE-ID`); TZIDs that aren't IANA names; components that break a rule of this spec
+- single properties: `RDATE`, and relations to tasks not in the file
+
+Ignored on import: alarms, attendees, and other properties without a counterpart.
+
 ## Validity
 
 A reader must reject a document that breaks any rule above and should report each problem with its path (e.g. `tasks.3.values.status`). A value in `values` whose key names no field is an error.

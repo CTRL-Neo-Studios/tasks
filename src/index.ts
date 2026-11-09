@@ -24,3 +24,4 @@ export {
 export { type Format, type Issue, parse, stringify, TasksFormatError, validate } from "./parse";
 export { merge, type MergeResult, type Repair } from "./merge";
 export { type Occurrence, type OccurrenceRange, occurrences } from "./recurrence";
+export { fromICS, type ImportResult, toICS } from "./ics";
