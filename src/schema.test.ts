@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { parse as parseYaml } from "yaml";
 import {
   kindOf,
   parse,
@@ -222,12 +223,69 @@ test("kindOf", () => {
   expect(kindOf({})).toBe("todo");
 });
 
-test("JSON round trip keeps unknown keys", () => {
-  const d = { ...doc(), "x-app": { theme: "dark" } };
-  d.tasks[0]!["x-sort"] = 3;
-  expect(parse(stringify(d, "json"), "json")).toEqual(d);
+describe.each(["json", "yaml", "toml"] as const)("%s", (format) => {
+  test("round trip keeps every value and unknown keys", () => {
+    const d = { ...doc(), "x-app": { theme: "dark" } };
+    d.tasks[0]!["x-sort"] = 3;
+    d.tasks[0]!.title = "yes"; // a boolean in YAML 1.1 if unquoted
+    expect(parse(stringify(d, format), format)).toEqual(d);
+  });
+
+  test("syntax errors are TasksFormatError", () => {
+    expect(() => parse("{[", format)).toThrow(TasksFormatError);
+  });
 });
 
-test("invalid JSON is a TasksFormatError", () => {
-  expect(() => parse("{", "json")).toThrow(TasksFormatError);
+test("YAML output reads the same in YAML 1.1 parsers", () => {
+  const d = doc();
+  d.tasks[0]!.title = "no";
+  expect(parseYaml(stringify(d, "yaml"), { version: "1.1" })).toEqual(d);
+});
+
+test("hand-written YAML keeps unquoted dates as strings", () => {
+  const d = parse(
+    `version: "1.0"
+tasks:
+  - id: a
+    title: Standup
+    start: 2026-11-10T09:30
+    duration: PT15M
+    updatedAt: 2026-11-09T10:00:00Z
+`,
+    "yaml",
+  );
+  expect(d.tasks[0]).toMatchObject({
+    start: "2026-11-10T09:30",
+    updatedAt: "2026-11-09T10:00:00Z",
+  });
+});
+
+test("hand-written TOML accepts native dates", () => {
+  const d = parse(
+    `version = "1.0"
+
+[[tasks]]
+id = "a"
+title = "Standup"
+start = 2026-11-10T09:30:00
+due = 2026-11-12
+updatedAt = 2026-11-09T10:00:00Z
+
+[tasks.values]
+status = "done"
+`,
+    "toml",
+  );
+  expect(d.tasks[0]).toMatchObject({
+    start: "2026-11-10T09:30:00.000",
+    due: "2026-11-12",
+    updatedAt: "2026-11-09T10:00:00.000Z",
+    values: { status: "done" },
+  });
+});
+
+test("TOML refuses nulls instead of dropping them", () => {
+  const d = doc();
+  d.tasks[1]!["x-color"] = null;
+  expect(() => stringify(d, "toml")).toThrow("tasks.1.x-color: TOML has no null");
 });

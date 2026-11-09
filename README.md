@@ -14,15 +14,15 @@ for (const task of doc.tasks) {
 const out = stringify(doc, "json"); // validates first; unknown keys survive
 ```
 
-| Export                      | Does                                               |
-| --------------------------- | -------------------------------------------------- |
-| `parse(text, format)`       | Text → validated `TaskDocument`                    |
-| `stringify(doc, format)`    | Validated `TaskDocument` → text                    |
-| `validate(value)`           | Checks an already-parsed object                    |
-| `resolveFields(doc)`        | Built-in and custom fields with their options      |
-| `kindOf(task)`              | `"span"`, `"moment"` or `"todo"`                   |
-| `documentSchema`            | The Zod schema (cross-field rules included)        |
-| `@type32/tasks/schema.json` | JSON Schema for editor completion (structure only) |
+| Export                      | Does                                                                      |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `parse(text, format)`       | `"json"`, `"yaml"` or `"toml"` text → validated `TaskDocument`            |
+| `stringify(doc, format)`    | Validated `TaskDocument` → text. YAML is quoted so YAML 1.1 readers agree |
+| `validate(value)`           | Checks an already-parsed object                                           |
+| `resolveFields(doc)`        | Built-in and custom fields with their options                             |
+| `kindOf(task)`              | `"span"`, `"moment"` or `"todo"`                                          |
+| `documentSchema`            | The Zod schema (cross-field rules included)                               |
+| `@type32/tasks/schema.json` | JSON Schema for editor completion (structure only)                        |
 
 For YAML editor completion, add `# yaml-language-server: $schema=https://unpkg.com/@type32/tasks/dist/schema.json` to the top of the file.
 

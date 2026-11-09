@@ -2,7 +2,7 @@
 
 One document format for todos, calendar events and timelines. A todo, an event and a timeline bar are the same object, a **task**; which one it is depends only on which time fields it has. Field names and meanings follow [JSCalendar (RFC 8984)](https://www.rfc-editor.org/rfc/rfc8984) where they overlap, so conversion stays mechanical.
 
-A document can be written as JSON, YAML or TOML; the data model is identical.
+A document can be written as JSON, YAML or TOML; the data model is identical. Every date and time is a string in the data model: unquoted YAML dates and native TOML date/time values are read as the equivalent string (TOML `2026-11-10T09:30:00` → `"2026-11-10T09:30:00.000"`). TOML has no `null`, so a document holding one can't be written as TOML.
 
 ## Document
 
