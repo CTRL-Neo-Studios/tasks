@@ -113,7 +113,7 @@ test("values that no longer fit their field are removed and reported", () => {
   ]);
 });
 
-test("an option whose category was removed is dropped along with values using it", () => {
+test("an option whose category was removed is marked deleted; values using it stay; the repair sticks", () => {
   const stage = (categories: string[], minute: number, options: object[] = []) => ({
     id: "stage",
     title: "Stage",
@@ -131,12 +131,18 @@ test("an option whose category was removed is dropped along with values using it
     ],
   });
   const { document, repairs } = merge(a, b);
-  expect(document.fields![0]!.options).toEqual([]);
-  expect(document.tasks[0]!.values).toBeUndefined();
-  expect(repairs.map((r) => r.path)).toEqual([
-    ["fields", 0, "options"],
-    ["tasks", 0, "values", "stage"],
+  expect(document.fields![0]!.options).toEqual([
+    {
+      id: "lost",
+      title: "Lost",
+      category: "closed",
+      updatedAt: "2026-11-09T10:01:00.001Z",
+      deletedAt: "2026-11-09T10:01:00.001Z",
+    },
   ]);
+  expect(document.tasks[0]!.values).toEqual({ stage: "lost" });
+  expect(repairs.map((r) => r.path)).toEqual([["fields", 0, "options"]]);
+  expect(merge(document, b).repairs).toEqual([]); // the stale copy no longer brings the option back
 });
 
 test("the higher minor version wins", () => {

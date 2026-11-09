@@ -1,3 +1,4 @@
+import { Temporal } from "temporal-polyfill";
 import { findCycle } from "./cycle";
 import { type Issue, validate } from "./parse";
 import {
@@ -133,6 +134,7 @@ function breakCycles<T extends Stamped & { parentId?: string; dependsOn?: string
       item.dependsOn = item.dependsOn!.filter((d) => d !== target);
       if (item.dependsOn.length === 0) delete item.dependsOn;
     }
+    bump(item);
     repairs.push({
       path: [collection, i, key],
       message: `"${item.id}" ${key} → "${target}" closed a cycle`,
@@ -153,26 +155,39 @@ function repairOptions(doc: TaskDocument, repairs: Repair[]): void {
       return;
     }
     const { categories } = f;
-    f.options = f.options.filter((o) => {
+    for (const o of f.options) {
       if (!categories) {
-        if (o.category === undefined) return true;
+        if (o.category === undefined) continue;
         repairs.push({
           path,
           message: `"${f.id}" has no categories anymore; option "${o.id}" lost its category`,
           removed: o.category,
         });
         delete o.category;
-        return true;
+        bump(o);
+      } else if (
+        o.deletedAt === undefined &&
+        (o.category === undefined || !categories.includes(o.category))
+      ) {
+        // Deleted rather than dropped: the marker wins later merges, and values using the option stay valid.
+        repairs.push({
+          path,
+          message: `option "${o.id}" has category "${o.category}", which "${f.id}" no longer has; marked deleted`,
+          removed: o.category,
+        });
+        bump(o);
+        o.deletedAt = o.updatedAt;
       }
-      if (o.category !== undefined && categories.includes(o.category)) return true;
-      repairs.push({
-        path,
-        message: `option "${o.id}" has category "${o.category}", which "${f.id}" no longer has`,
-        removed: o,
-      });
-      return false;
-    });
+    }
   });
+}
+
+/**
+ * A repaired record must beat both copies it came from, or merging a stale copy again would undo the repair.
+ * One millisecond past its own stamp is deterministic, so every device produces the same repaired record.
+ */
+function bump(record: Stamped): void {
+  record.updatedAt = Temporal.Instant.from(record.updatedAt!).add({ milliseconds: 1 }).toString();
 }
 
 /** Values set against an older version of their field definition. */
@@ -180,13 +195,16 @@ function repairValues(doc: TaskDocument, repairs: Repair[]): void {
   const fields = resolveFields(doc);
   doc.tasks.forEach((t, i) => {
     if (!t.values) return;
+    let changed = false;
     for (const [key, value] of Object.entries(t.values)) {
       const field = fields[key];
       const error = field ? valueError(field, value) : `unknown field "${key}"`;
       if (error === undefined) continue;
       repairs.push({ path: ["tasks", i, "values", key], message: error, removed: value });
       delete t.values[key];
+      changed = true;
     }
+    if (changed) bump(t);
     if (Object.keys(t.values).length === 0) delete t.values;
   });
 }

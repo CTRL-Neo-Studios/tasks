@@ -14,20 +14,29 @@ for (const task of doc.tasks) {
 const out = stringify(doc, "json"); // validates first; unknown keys survive
 ```
 
-| Export                        | Does                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------- |
-| `parse(text, format)`         | `"json"`, `"yaml"` or `"toml"` text → validated `TaskDocument`                                    |
-| `stringify(doc, format)`      | Validated `TaskDocument` → text. YAML is quoted so YAML 1.1 readers agree                         |
-| `validate(value)`             | Checks an already-parsed object                                                                   |
-| `resolveFields(doc)`          | Built-in and custom fields with their options                                                     |
-| `kindOf(task)`                | `"span"`, `"moment"` or `"todo"`                                                                  |
-| `merge(a, b)`                 | Combines two copies for sync: `{ document, repairs }`. See SPEC "Merging"                         |
-| `occurrences(task, range)`    | A task's occurrences overlapping `[from, to)`, with recurrence expanded and DST handled           |
-| `toICS(doc)`, `fromICS(text)` | iCalendar export and import. Import returns `{ document, dropped }`. See SPEC "iCalendar mapping" |
-| `documentSchema`              | The Zod schema (cross-field rules included)                                                       |
-| `@type32/tasks/schema.json`   | JSON Schema for editor completion (structure only)                                                |
+| Export                                           | Does                                                                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `parse(text, format)`                            | `"json"`, `"yaml"` or `"toml"` text → validated `TaskDocument`                                                   |
+| `stringify(doc, format)`                         | Validated `TaskDocument` → text. YAML is quoted so YAML 1.1 readers agree                                        |
+| `validate(value)`                                | Checks an already-parsed object                                                                                  |
+| `resolveFields(doc)`                             | Built-in and custom fields with their options                                                                    |
+| `kindOf(task)`                                   | `"span"`, `"moment"` or `"todo"`                                                                                 |
+| `merge(a, b)`                                    | Combines two copies for sync: `{ document, repairs }`. See SPEC "Merging"                                        |
+| `occurrences(task, range)`                       | A task's occurrences overlapping `[from, to)`, with recurrence expanded and DST handled                          |
+| `toICS(doc)`, `fromICS(text)`                    | iCalendar export and import. Import returns `{ document, dropped }`. See SPEC "iCalendar mapping"                |
+| `parseMarkdown(text)`, `stringifyMarkdown(file)` | A Markdown file holding one task in its frontmatter `task:`; the body is `notes`. See SPEC "Markdown task files" |
+| `isTaskFile(text)`                               | Whether a Markdown file holds a task. Reads only the frontmatter and never throws; for indexing                  |
+| `documentSchema`                                 | The Zod schema (cross-field rules included)                                                                      |
+| `@type32/tasks/schema.json`                      | JSON Schema for editor completion (structure only)                                                               |
 
 For YAML editor completion, add `# yaml-language-server: $schema=https://unpkg.com/@type32/tasks/dist/schema.json` to the top of the file.
+
+A folder of Markdown task files becomes one document by combining the tasks with your lists and fields, then validating:
+
+```ts
+const tasks = texts.filter(isTaskFile).map((text) => parseMarkdown(text).task);
+const doc = validate({ version: "1.0", lists, fields, tasks }); // checks references and values across files
+```
 
 Requires Node ≥ 20.19 or any modern runtime. ESM only.
 

@@ -93,7 +93,11 @@ export function occurrences(task: Task, range: OccurrenceRange): Occurrence[] {
     if (rule?.count !== undefined && count++ >= rule.count) break;
     if (excluded.has(occurrence.toString())) continue;
     const built = build(occurrence);
-    if (built) result.push(built);
+    if (!built) continue;
+    // A wall-clock time a zone skipped (Samoa dropped 2011-12-30) moves forward onto the next occurrence.
+    const last = result.at(-1);
+    if (last && (last.start ?? last.due) === (built.start ?? built.due)) continue;
+    result.push(built);
   }
   return result;
 }

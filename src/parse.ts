@@ -1,5 +1,6 @@
 import { parse as parseToml, stringify as stringifyToml, TomlDate } from "smol-toml";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import type * as z from "zod";
 import { documentSchema, type TaskDocument } from "./schema";
 
 export type Format = "json" | "yaml" | "toml";
@@ -28,38 +29,62 @@ export class TasksFormatError extends Error {
  * Cross-field rules (references, cycles, values) only run once the structure is valid.
  */
 export function validate(value: unknown): TaskDocument {
-  const result = documentSchema.safeParse(value);
+  return check(documentSchema, value);
+}
+
+/** Runs `schema`, turning Zod issues into a `TasksFormatError` with paths under `prefix`. */
+export function check<T>(schema: z.ZodType<T>, value: unknown, prefix: Issue["path"] = []): T {
+  const result = schema.safeParse(value);
   if (result.success) return result.data;
   throw new TasksFormatError(
     result.error.issues.map((i) => ({
-      path: i.path.map((k) => (typeof k === "symbol" ? String(k) : k)),
+      path: [...prefix, ...i.path.map((k) => (typeof k === "symbol" ? String(k) : k))],
       message: i.message,
     })),
   );
 }
 
 export function parse(text: string, format: Format): TaskDocument {
-  let value: unknown;
+  return validate(decode(text, format));
+}
+
+/** Validates, then serializes. Unknown keys are written back unchanged. */
+export function stringify(doc: TaskDocument, format: Format): string {
+  return encode(validate(doc), format);
+}
+
+/** Text → plain data. Syntax errors become `TasksFormatError`; a leading BOM is ignored. */
+export function decode(text: string, format: Format): unknown {
+  const source = text.replace(/^\uFEFF/, "");
   try {
-    value = decode(text, format);
+    switch (format) {
+      case "json":
+        return JSON.parse(source);
+      case "yaml":
+        // YAML 1.2 core schema (the default) keeps `2026-11-12` a string rather than a Date.
+        return parseYaml(source);
+      case "toml":
+        return datesToStrings(parseToml(source));
+    }
   } catch (error) {
     throw new TasksFormatError([
       { path: [], message: `invalid ${format}: ${(error as Error).message}` },
     ]);
   }
-  return validate(value);
 }
 
-/** Validates, then serializes. Unknown keys are written back unchanged. */
-export function stringify(doc: TaskDocument, format: Format): string {
-  const data = validate(doc);
+/** Plain data → text, no validation. */
+export function encode(data: unknown, format: Format): string {
   switch (format) {
     case "json":
       return `${JSON.stringify(data, null, 2)}\n`;
     case "yaml":
-      // 1.1 rules quote anything a YAML 1.1 reader would turn into a date, boolean or number
-      // (`2026-11-12`, `yes`); quoted output reads the same under 1.2.
-      return stringifyYaml(data, { version: "1.1" });
+      // Quote any string a YAML 1.1 reader (`yes`, `2026-11-12`) or a 1.2 core reader (`0o17`) would turn into
+      // another type: 1.1 rules plus the 1.2 core number tags.
+      return stringifyYaml(data, {
+        version: "1.1",
+        customTags: ["intOct", "intHex", "int", "floatExp", "floatNaN", "float"],
+      });
     case "toml": {
       // smol-toml silently drops nulls; unknown keys from JSON input may hold them.
       const path = findNull(data, []);
@@ -67,20 +92,8 @@ export function stringify(doc: TaskDocument, format: Format): string {
         throw new TasksFormatError([
           { path, message: "TOML has no null; remove the key or use JSON/YAML" },
         ]);
-      return stringifyToml(data);
+      return stringifyToml(data as Record<string, unknown>);
     }
-  }
-}
-
-function decode(text: string, format: Format): unknown {
-  switch (format) {
-    case "json":
-      return JSON.parse(text);
-    case "yaml":
-      // YAML 1.2 core schema (the default) keeps `2026-11-12` a string rather than a Date.
-      return parseYaml(text);
-    case "toml":
-      return datesToStrings(parseToml(text));
   }
 }
 

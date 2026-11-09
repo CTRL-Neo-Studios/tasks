@@ -351,6 +351,11 @@ export const documentSchema: z.ZodType<TaskDocument> = z
     checkDocument(doc, (path, message) => ctx.addIssue({ code: "custom", path, message })),
   );
 
+/** One task on its own: shape and time rules. References and `values` need the whole document. */
+export const standaloneTaskSchema: z.ZodType<Task> = taskSchema.superRefine((t, ctx) =>
+  checkTime(t, [], (path, message) => ctx.addIssue({ code: "custom", path, message })),
+);
+
 // --- Cross-field rules ---
 
 type Path = (string | number)[];
@@ -489,7 +494,10 @@ function checkField(f: FieldDefinition, path: Path, issue: Report): void {
     if (o.title === undefined) issue([...p, "title"], "options need a title");
     if (!categories) {
       if (o.category !== undefined) issue([...p, "category"], `field "${f.id}" has no categories`);
-    } else if (o.category === undefined || !categories.includes(o.category)) {
+    } else if (
+      o.deletedAt === undefined &&
+      (o.category === undefined || !categories.includes(o.category))
+    ) {
       issue([...p, "category"], `expected one of: ${categories.join(", ")}`);
     }
   });

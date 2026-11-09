@@ -59,8 +59,10 @@ Two copies of a document merge record by record, so any implementation reaches t
 Two valid copies can still combine into an invalid document. Repair it like this and tell the user what was removed:
 
 - **Cycles** in `parentId` or `dependsOn` (tasks) or `parentId` (lists): within the loop, find the record that wins by rules 2–3 and remove its link to the next record. This undoes the later move.
-- **Options** that don't fit the winning field definition: drop every option when the field is no longer a select; drop an option whose category the field no longer has; remove `category` from options when the field has no categories anymore.
-- **Values** that no longer fit their field (type, range, or an option that was dropped): remove them from `values`.
+- **Options** that don't fit the winning field definition: drop every option when the field is no longer a select; mark deleted an option whose category the field no longer has (values using it stay valid); remove `category` from options when the field has no categories anymore.
+- **Values** that no longer fit their field (type or range): remove them from `values`.
+
+Every record a repair changes gets `updatedAt` one millisecond later than its own. The repaired version then wins against both copies it came from, so merging a stale copy again doesn't undo the repair, and every device still computes the same result.
 
 Order is not synced: a merged collection keeps the first copy's order and appends records only the second copy has.
 
@@ -178,11 +180,11 @@ A custom field is a synced record.
 
 An option is a synced record.
 
-| Key        | Type   | Notes                                                          |
-| ---------- | ------ | -------------------------------------------------------------- |
-| `title`    | string | Required, except when renaming a built-in option.              |
-| `color`    | Color  |                                                                |
-| `category` | string | Required when the field has `categories`; must be one of them. |
+| Key        | Type   | Notes                                                                                          |
+| ---------- | ------ | ---------------------------------------------------------------------------------------------- |
+| `title`    | string | Required, except when renaming a built-in option.                                              |
+| `color`    | Color  |                                                                                                |
+| `category` | string | Required when the field has `categories`; must be one of them. Deleted options aren't checked. |
 
 Every option merges on its own, so two devices adding options at the same time both keep theirs.
 
@@ -199,6 +201,30 @@ Always present. A document may list a built-in field only to add options to it, 
 | `location` | text        |                             |                            |
 
 Built-in categories are what other apps rely on: any app knows a task with status `shipped` is done because `shipped` maps to `done`. A task without a status counts as `todo`.
+
+## Markdown task files
+
+A Markdown file can hold one task. Its frontmatter, YAML between `---` lines or TOML between `+++` lines starting on the first line, has a `task` object; the body after the closing fence is the task's `notes`, byte for byte. Other frontmatter keys belong to the note and are kept.
+
+```markdown
+---
+aliases: [invoice]
+task:
+  id: invoice
+  title: Ship invoice
+  due: 2026-11-12
+  values: { status: todo }
+  updatedAt: 2026-11-09T10:00:00Z
+---
+
+# Ship invoice
+
+- [ ] attach PDF
+```
+
+- `task.notes` must not appear in the frontmatter; the body is the notes.
+- A file is a task file exactly when its frontmatter has a `task` object; an invalid task is still a task file.
+- A file on its own is checked for the task's shape and time rules. References and `values` need the other tasks and the field definitions, so they're checked once the tasks form a document.
 
 ## iCalendar mapping
 

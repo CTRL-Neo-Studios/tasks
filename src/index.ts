@@ -25,3 +25,4 @@ export { type Format, type Issue, parse, stringify, TasksFormatError, validate }
 export { merge, type MergeResult, type Repair } from "./merge";
 export { type Occurrence, type OccurrenceRange, occurrences } from "./recurrence";
 export { fromICS, type ImportResult, toICS } from "./ics";
+export { isTaskFile, type MarkdownTask, parseMarkdown, stringifyMarkdown } from "./markdown";

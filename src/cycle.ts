@@ -1,31 +1,40 @@
 /**
  * Indices of the first cycle along `edges`, in link order (each member links to the next, the last to the first).
- * Edges to unknown ids are ignored.
+ * Edges to unknown ids are ignored. Iterative, so chains of any length don't overflow the call stack.
  */
 export function findCycle<T extends { id: string }>(
   items: readonly T[],
   edges: (item: T) => readonly string[],
 ): number[] | undefined {
   const index = new Map(items.map((item, i) => [item.id, i]));
-  const state = new Uint8Array(items.length); // 0 unvisited, 1 on stack, 2 done
-  const stack: number[] = [];
-  const visit = (i: number): number[] | undefined => {
-    if (state[i] === 1) return stack.slice(stack.indexOf(i));
-    if (state[i] === 2) return undefined;
+  const state = new Uint8Array(items.length); // 0 unvisited, 1 on the current path, 2 done
+  const path: number[] = [];
+  const targets: (readonly string[])[] = [];
+  const next: number[] = []; // per path entry: position in its targets
+  const enter = (i: number): void => {
     state[i] = 1;
-    stack.push(i);
-    for (const target of edges(items[i]!)) {
-      const j = index.get(target);
-      const cycle = j === undefined ? undefined : visit(j);
-      if (cycle) return cycle;
-    }
-    stack.pop();
-    state[i] = 2;
-    return undefined;
+    path.push(i);
+    targets.push(edges(items[i]!));
+    next.push(0);
   };
-  for (let i = 0; i < items.length; i++) {
-    const cycle = visit(i);
-    if (cycle) return cycle;
+  for (let root = 0; root < items.length; root++) {
+    if (state[root] !== 0) continue;
+    enter(root);
+    while (path.length > 0) {
+      const top = path.length - 1;
+      const position = next[top]!;
+      if (position === targets[top]!.length) {
+        state[path.pop()!] = 2;
+        targets.pop();
+        next.pop();
+        continue;
+      }
+      next[top] = position + 1;
+      const j = index.get(targets[top]![position]!);
+      if (j === undefined || state[j] === 2) continue;
+      if (state[j] === 1) return path.slice(path.indexOf(j));
+      enter(j);
+    }
   }
   return undefined;
 }
