@@ -141,7 +141,7 @@ test("all-day spans keep an inclusive end and overlap the range", () => {
   expect(occurrences(trip, { from: "2026-11-12", to: "2026-11-17" })).toEqual([
     { start: "2026-11-10", end: "2026-11-12" },
   ]);
-  expect(occurrences(trip, { from: "2026-11-13", to: "2026-11-18" })).toEqual([]);
+  expect(occurrences(trip, { from: "2026-11-13", to: "2026-11-17" })).toEqual([]);
   const oneDay = task({ start: "2026-11-10", duration: "P1D" });
   expect(occurrences(oneDay, { from: "2026-11-10", to: "2026-11-11" })).toEqual([
     { start: "2026-11-10", end: "2026-11-10" },

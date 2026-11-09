@@ -14,16 +14,17 @@ for (const task of doc.tasks) {
 const out = stringify(doc, "json"); // validates first; unknown keys survive
 ```
 
-| Export                      | Does                                                                      |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `parse(text, format)`       | `"json"`, `"yaml"` or `"toml"` text → validated `TaskDocument`            |
-| `stringify(doc, format)`    | Validated `TaskDocument` → text. YAML is quoted so YAML 1.1 readers agree |
-| `validate(value)`           | Checks an already-parsed object                                           |
-| `resolveFields(doc)`        | Built-in and custom fields with their options                             |
-| `kindOf(task)`              | `"span"`, `"moment"` or `"todo"`                                          |
-| `merge(a, b)`               | Combines two copies for sync: `{ document, repairs }`. See SPEC "Merging" |
-| `documentSchema`            | The Zod schema (cross-field rules included)                               |
-| `@type32/tasks/schema.json` | JSON Schema for editor completion (structure only)                        |
+| Export                      | Does                                                                                    |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `parse(text, format)`       | `"json"`, `"yaml"` or `"toml"` text → validated `TaskDocument`                          |
+| `stringify(doc, format)`    | Validated `TaskDocument` → text. YAML is quoted so YAML 1.1 readers agree               |
+| `validate(value)`           | Checks an already-parsed object                                                         |
+| `resolveFields(doc)`        | Built-in and custom fields with their options                                           |
+| `kindOf(task)`              | `"span"`, `"moment"` or `"todo"`                                                        |
+| `merge(a, b)`               | Combines two copies for sync: `{ document, repairs }`. See SPEC "Merging"               |
+| `occurrences(task, range)`  | A task's occurrences overlapping `[from, to)`, with recurrence expanded and DST handled |
+| `documentSchema`            | The Zod schema (cross-field rules included)                                             |
+| `@type32/tasks/schema.json` | JSON Schema for editor completion (structure only)                                      |
 
 For YAML editor completion, add `# yaml-language-server: $schema=https://unpkg.com/@type32/tasks/dist/schema.json` to the top of the file.
 

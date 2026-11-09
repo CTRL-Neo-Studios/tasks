@@ -74,22 +74,22 @@ Order is not synced: a merged collection keeps the first copy's order and append
 
 ## Task
 
-| Key             | Type                           | Notes                                                                    |
-| --------------- | ------------------------------ | ------------------------------------------------------------------------ |
-| `title`         | string                         | Required.                                                                |
-| `notes`         | string                         |                                                                          |
-| `listId`        | Id                             | Must name a list.                                                        |
-| `parentId`      | Id                             | Parent task (subtask). No cycles.                                        |
-| `dependsOn`     | Id[]                           | Tasks that must finish first. No cycles.                                 |
-| `start`         | LocalDate \| LocalDateTime     |                                                                          |
-| `end`           | LocalDate \| LocalDateTime     | Needs `start`, same form as `start`, not before it. Excludes `duration`. |
-| `duration`      | Duration                       | Needs `start`. All-day starts take whole days or weeks only.             |
-| `due`           | LocalDate \| LocalDateTime     |                                                                          |
-| `timeZone`      | TimeZone                       | Applies to every local time on the task. Absent: floating.               |
-| `recurrence`    | [Recurrence](#recurrence)      | Needs `start` or `due`.                                                  |
-| `excludedDates` | (LocalDate \| LocalDateTime)[] | Occurrences to skip. Needs `recurrence`; same form as the anchor.        |
-| `completedAt`   | UTCDateTime                    |                                                                          |
-| `values`        | object                         | Field id → value. See [Fields](#fields).                                 |
+| Key             | Type                           | Notes                                                                                                                                                                                        |
+| --------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`         | string                         | Required.                                                                                                                                                                                    |
+| `notes`         | string                         |                                                                                                                                                                                              |
+| `listId`        | Id                             | Must name a list.                                                                                                                                                                            |
+| `parentId`      | Id                             | Parent task (subtask). No cycles.                                                                                                                                                            |
+| `dependsOn`     | Id[]                           | Tasks that must finish first. No cycles.                                                                                                                                                     |
+| `start`         | LocalDate \| LocalDateTime     |                                                                                                                                                                                              |
+| `end`           | LocalDate \| LocalDateTime     | Needs `start`, same form as `start`, not before it. Excludes `duration`. A date `end` is inclusive (`start: 2026-11-10, end: 2026-11-12` is three days); a date-time `end` is the exact end. |
+| `duration`      | Duration                       | Needs `start`. All-day starts take whole days or weeks only. Days are calendar days, hours are elapsed time (a DST change can shift the end's wall-clock time).                              |
+| `due`           | LocalDate \| LocalDateTime     |                                                                                                                                                                                              |
+| `timeZone`      | TimeZone                       | Applies to every local time on the task. Absent: floating.                                                                                                                                   |
+| `recurrence`    | [Recurrence](#recurrence)      | Needs `start` or `due`.                                                                                                                                                                      |
+| `excludedDates` | (LocalDate \| LocalDateTime)[] | Occurrences to skip. Needs `recurrence`; same form as the anchor.                                                                                                                            |
+| `completedAt`   | UTCDateTime                    |                                                                                                                                                                                              |
+| `values`        | object                         | Field id → value. See [Fields](#fields).                                                                                                                                                     |
 
 ### Kind
 
@@ -117,7 +117,16 @@ The rule repeats the task's anchor: `start`, or `due` when there is no `start`. 
 | `count`      | integer ≥ 1                            | Total occurrences. Excludes `until`.                                                   |
 | `until`      | LocalDate \| LocalDateTime             | Last possible occurrence, inclusive. Same form as the anchor.                          |
 
-Weeks start on Monday. Completing a recurring todo moves its anchor to the next occurrence.
+Expanding a rule:
+
+- The anchor is always the first occurrence, even if the rule wouldn't produce it.
+- Weeks start on Monday.
+- Dates that don't exist are skipped, not moved: the 31st in a 30-day month, 29 February outside leap years.
+- Occurrences keep the anchor's wall-clock time in `timeZone`. A time skipped by a DST change moves forward by the gap (02:30 → 03:30).
+- `count` includes occurrences removed by `excludedDates`.
+- `end` and `due` move with each occurrence by their offset from `start`.
+
+Completing a recurring todo moves its anchor to the next occurrence.
 
 ## Fields
 

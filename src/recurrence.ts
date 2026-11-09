@@ -152,7 +152,7 @@ function* recur(anchor: DateTime, rule: Recurrence, limit: DateTime): Generator<
     if (PlainDate.compare(period, end) > 0) return;
     const dates = candidates
       .filter((d) => matches(d, rule) && PlainDate.compare(d, first) > 0)
-      .sort(PlainDate.compare);
+      .toSorted(PlainDate.compare);
     for (let i = 0; i < dates.length; i++) {
       if (i > 0 && dates[i]!.equals(dates[i - 1]!)) continue;
       yield dates[i]!.toPlainDateTime(time);
