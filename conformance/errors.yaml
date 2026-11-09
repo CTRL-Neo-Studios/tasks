@@ -1,0 +1,610 @@
+# Deliberately broken inputs. Shared by every implementation (TypeScript today, Rust next).
+#
+# Each case: `name`, `format` (json | yaml | toml | markdown | ics), `input` text, and one of:
+#   issues:  reading throws, reporting exactly these paths (any order). [] is the document root.
+#   dropped: (ics only) import succeeds but reports exactly these dropped paths.
+# Messages are deliberately not compared: wording is per implementation, paths are the contract.
+# Shape errors are reported before cross-field rules run, so each case breaks one thing.
+
+# --- Syntax ---
+- name: json trailing comma
+  format: json
+  input: '{"version":"1.0","tasks":[],}'
+  issues: [[]]
+- name: json empty input
+  format: json
+  input: ""
+  issues: [[]]
+- name: json single quotes
+  format: json
+  input: "{'version':'1.0','tasks':[]}"
+  issues: [[]]
+- name: yaml unclosed flow sequence
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [
+  issues: [[]]
+- name: yaml tab indentation
+  format: yaml
+  input: "version: \"1.0\"\ntasks:\n\t- { id: a, title: A, updatedAt: 2026-11-09T10:00:00Z }\n"
+  issues: [[]]
+- name: yaml duplicate key
+  format: yaml
+  input: |
+    version: "1.0"
+    version: "1.1"
+    tasks: []
+  issues: [[]]
+- name: yaml two documents
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: []
+    ---
+    version: "1.0"
+    tasks: []
+  issues: [[]]
+- name: toml duplicate table
+  format: toml
+  input: |
+    version = "1.0"
+    tasks = []
+    [x-app]
+    a = 1
+    [x-app]
+    b = 2
+  issues: [[]]
+- name: toml unterminated string
+  format: toml
+  input: |
+    version = "1.0
+    tasks = []
+  issues: [[]]
+- name: toml integer too large to keep exactly
+  format: toml
+  input: |
+    version = "1.0"
+    tasks = []
+    big = 9007199254740993
+  issues: [[]]
+
+# --- Document root ---
+- name: root is a list
+  format: json
+  input: "[]"
+  issues: [[]]
+- name: root is a string
+  format: yaml
+  input: hello
+  issues: [[]]
+- name: empty yaml document
+  format: yaml
+  input: ""
+  issues: [[]]
+- name: missing version
+  format: yaml
+  input: "tasks: []"
+  issues: [[version]]
+- name: future major version
+  format: yaml
+  input: |
+    version: "2.0"
+    tasks: []
+  issues: [[version]]
+- name: version as a number (unquoted yaml)
+  format: yaml
+  input: |
+    version: 1.0
+    tasks: []
+  issues: [[version]]
+- name: version as a number (toml float)
+  format: toml
+  input: |
+    version = 1.0
+    tasks = []
+  issues: [[version]]
+- name: missing tasks
+  format: yaml
+  input: 'version: "1.0"'
+  issues: [[tasks]]
+- name: tasks is a map
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: { a: 1 }
+  issues: [[tasks]]
+
+# --- Task shape ---
+- name: task without id
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ title: A, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, id]]
+- name: empty id
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: "", title: A, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, id]]
+- name: numeric id
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: 42, title: A, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, id]]
+- name: task without title
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, title]]
+- name: task without updatedAt
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A }]
+  issues: [[tasks, 0, updatedAt]]
+- name: updatedAt without Z
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, updatedAt: 2026-11-09T10:00:00 }]
+  issues: [[tasks, 0, updatedAt]]
+- name: updatedAt with an offset
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, updatedAt: "2026-11-09T10:00:00+01:00" }]
+  issues: [[tasks, 0, updatedAt]]
+- name: month 13
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-13-01, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, start]]
+- name: 30 February
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, due: 2026-02-30, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, due]]
+- name: local time with an offset
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, due: "2026-11-10T09:30+01:00", updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, due]]
+- name: natural-language date
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, due: tomorrow, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, due]]
+- name: duration in months
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, duration: P1M, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, duration]]
+- name: unknown time zone
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10T09:30, timeZone: Mars/Olympus, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, timeZone]]
+- name: dependsOn as a string
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, dependsOn: b, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, dependsOn]]
+- name: values as a list
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: [done], updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values]]
+- name: value as a map
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { status: { id: done } }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, status]]
+
+# --- Recurrence shape ---
+- name: hourly frequency
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: hourly }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, freq]]
+- name: interval 0
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: daily, interval: 0 }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, interval]]
+- name: weekday spelled out
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: weekly, byDay: [{ day: monday }] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, byDay, 0, day]]
+- name: nth 0
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: monthly, byDay: [{ day: mo, nth: 0 }] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, byDay, 0, nth]]
+- name: month day 32
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: monthly, byMonthDay: [32] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, byMonthDay, 0]]
+- name: month 13 in a rule
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: yearly, byMonth: [13] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, byMonth, 0]]
+- name: fractional count
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: daily, count: 1.5 }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, count]]
+- name: unsupported rule part
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: monthly, bySetPos: [-1] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence]]
+- name: empty byDay
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: weekly, byDay: [] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, byDay]]
+
+# --- References ---
+- name: duplicate task id
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks:
+      - { id: a, title: A, updatedAt: 2026-11-09T10:00:00Z }
+      - { id: a, title: B, updatedAt: 2026-11-09T10:00:00Z }
+  issues: [[tasks, 1, id]]
+- name: unknown list
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, listId: nope, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, listId]]
+- name: unknown parent
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, parentId: nope, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, parentId]]
+- name: unknown dependency
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, dependsOn: [nope], updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, dependsOn, 0]]
+- name: depends on itself
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, dependsOn: [a], updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, dependsOn]]
+- name: parent cycle
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks:
+      - { id: a, title: A, parentId: b, updatedAt: 2026-11-09T10:00:00Z }
+      - { id: b, title: B, parentId: a, updatedAt: 2026-11-09T10:00:00Z }
+  issues: [[tasks, 0, parentId]]
+- name: list cycle
+  format: yaml
+  input: |
+    version: "1.0"
+    lists:
+      - { id: x, title: X, parentId: y, updatedAt: 2026-11-09T10:00:00Z }
+      - { id: y, title: Y, parentId: x, updatedAt: 2026-11-09T10:00:00Z }
+    tasks: []
+  issues: [[lists, 0, parentId]]
+- name: bad list color
+  format: yaml
+  input: |
+    version: "1.0"
+    lists: [{ id: x, title: X, color: red, updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[lists, 0, color]]
+
+# --- Time rules ---
+- name: end without start
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, end: 2026-11-10, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, end]]
+- name: end before start
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10T10:00, end: 2026-11-10T09:59:59, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, end]]
+- name: end and duration
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, end: 2026-11-11, duration: P1D, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, duration]]
+- name: date end on a timed start
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10T09:00, end: 2026-11-11, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, end]]
+- name: hour duration on an all-day start
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, duration: PT1H, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, duration]]
+- name: recurrence without start or due
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, recurrence: { freq: daily }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence]]
+- name: count and until
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: daily, count: 2, until: 2026-12-01 }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence]]
+- name: until in another form than start
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10T09:00, recurrence: { freq: daily, until: 2026-12-01 }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, until]]
+- name: nth on a weekly rule
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, recurrence: { freq: weekly, byDay: [{ day: tu, nth: 1 }] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, recurrence, byDay, 0, nth]]
+- name: excluded dates without a rule
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-11-10, excludedDates: [2026-11-11], updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, excludedDates, 0]]
+
+# --- Fields and values ---
+- name: value for an undefined field
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { estimate: 3 }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, estimate]]
+- name: unknown status
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { status: shipped }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, status]]
+- name: tags as a string
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { tags: work }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, tags]]
+- name: duplicate tags
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { tags: [a, a] }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, tags]]
+- name: progress over 100
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { progress: 101 }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, progress]]
+- name: NaN number
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { progress: .nan }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, progress]]
+- name: relative url
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: link, title: Link, type: url, updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: [{ id: a, title: A, values: { link: /invoices/42 }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, link]]
+- name: yes is not a boolean
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: billable, title: Billable, type: boolean, updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: [{ id: a, title: A, values: { billable: yes }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, billable]]
+- name: date field with a UTC time
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: signed, title: Signed, type: date, updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: [{ id: a, title: A, values: { signed: 2026-11-09T10:00:00Z }, updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, values, signed]]
+- name: custom field without type
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: x, title: X, updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[fields, 0, type]]
+- name: custom field without title and updatedAt
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: x, type: text }]
+    tasks: []
+  issues: [[fields, 0, title], [fields, 0, updatedAt]]
+- name: options on a text field
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: x, title: X, type: text, options: [], updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[fields, 0, options]]
+- name: categories on a number field
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: x, title: X, type: number, categories: [a], updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[fields, 0, categories]]
+- name: min above max
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: x, title: X, type: number, min: 5, max: 1, updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[fields, 0, max]]
+- name: duplicate category
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: x, title: X, type: select, categories: [a, a], updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[fields, 0, categories, 1]]
+- name: option without its category
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: x, title: X, type: select, categories: [a], options: [{ id: o, title: O, updatedAt: 2026-11-09T10:00:00Z }], updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[fields, 0, options, 0, category]]
+- name: option with an undeclared category
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: status, options: [{ id: o, title: O, category: archived, updatedAt: 2026-11-09T10:00:00Z }] }]
+    tasks: []
+  issues: [[fields, 0, options, 0, category]]
+- name: changing a built-in field's type
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: status, type: text }]
+    tasks: []
+  issues: [[fields, 0, type]]
+- name: recategorizing a built-in option
+  format: yaml
+  input: |
+    version: "1.0"
+    fields: [{ id: status, options: [{ id: done, category: todo, updatedAt: 2026-11-09T10:00:00Z }] }]
+    tasks: []
+  issues: [[fields, 0, options, 0, category]]
+- name: duplicate option id
+  format: yaml
+  input: |
+    version: "1.0"
+    fields:
+      - id: tags
+        options:
+          - { id: x, title: X, updatedAt: 2026-11-09T10:00:00Z }
+          - { id: x, title: Y, updatedAt: 2026-11-09T10:00:00Z }
+    tasks: []
+  issues: [[fields, 0, options, 1, id]]
+
+# --- Markdown task files ---
+- name: markdown without frontmatter
+  format: markdown
+  input: "# Just a note\n"
+  issues: [[]]
+- name: markdown with unclosed frontmatter
+  format: markdown
+  input: "---\ntask:\n  id: a\n"
+  issues: [[]]
+- name: markdown task is a string
+  format: markdown
+  input: "---\ntask: buy milk\n---\n"
+  issues: [[task]]
+- name: markdown notes in frontmatter
+  format: markdown
+  input: "---\ntask: { id: a, title: A, notes: x, updatedAt: 2026-11-09T10:00:00Z }\n---\n"
+  issues: [[task, notes]]
+- name: markdown task without id
+  format: markdown
+  input: "---\ntask: { title: A, updatedAt: 2026-11-09T10:00:00Z }\n---\n"
+  issues: [[task, id]]
+- name: markdown broken toml frontmatter
+  format: markdown
+  input: "+++\n[task\n+++\n"
+  issues: [[]]
+- name: markdown time rule
+  format: markdown
+  input: "---\ntask: { id: a, title: A, start: 2026-11-10, end: 2026-11-09, updatedAt: 2026-11-09T10:00:00Z }\n---\n"
+  issues: [[task, end]]
+
+# --- iCalendar ---
+- name: ics not a calendar
+  format: ics
+  input: "hello"
+  issues: [[]]
+- name: ics unsupported rule part
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART:20261110T090000\nRRULE:FREQ=MONTHLY;BYSETPOS=-1;BYDAY=MO\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a]]
+- name: ics hourly rule
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART:20261110T090000\nRRULE:FREQ=HOURLY\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a]]
+- name: ics component without UID
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VTODO\nSUMMARY:x\nEND:VTODO\nEND:VCALENDAR\n"
+  dropped: [["VTODO #1"]]
+- name: ics Windows time zone name
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART;TZID=W. Europe Standard Time:20261110T090000\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a]]
+- name: ics changed occurrence
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nRECURRENCE-ID:20261110T090000\nDTSTART:20261110T100000\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a]]
+- name: ics extra dates
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART:20261110T090000\nRDATE:20261112T090000\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a, RDATE]]
+- name: ics unreadable date
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART:2026\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a]]
+- name: ics end before start
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART:20261110T090000\nDTEND:20261110T080000\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a, end]]
+- name: ics negative duration
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART:20261110T090000\nDURATION:-PT15M\nEND:VEVENT\nEND:VCALENDAR\n"
+  dropped: [[a, duration]]
+- name: ics parent outside the file
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:a\nRELATED-TO:elsewhere\nEND:VTODO\nEND:VCALENDAR\n"
+  dropped: [[a, RELATED-TO]]
+- name: ics duplicate UID
+  format: ics
+  input: "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:a\nEND:VTODO\nBEGIN:VTODO\nUID:a\nEND:VTODO\nEND:VCALENDAR\n"
+  dropped: [[a]]

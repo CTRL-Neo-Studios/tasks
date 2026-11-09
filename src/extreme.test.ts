@@ -122,6 +122,22 @@ describe("text formats", () => {
     expect(Object.getPrototypeOf(parsed.tasks[0])).toBe(Object.prototype);
     expect(parsed.tasks[0]!.values).toEqual({}); // a field can't be named __proto__; the key is dropped
   });
+
+  test("YAML __proto__ and merge keys never touch Object.prototype", () => {
+    const text = `version: "1.0"\n__proto__: { polluted: true }\nx: &p { polluted: true }\ny: { <<: *p }\ntasks:\n  - { id: a, title: a, updatedAt: ${at}, __proto__: { polluted: true } }\n`;
+    const parsed = parse(text, "yaml");
+    expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+    expect(Object.getPrototypeOf(parsed.tasks[0])).toBe(Object.prototype);
+  });
+
+  test("ordinary YAML anchor reuse passes the alias expansion guard", () => {
+    const tasks = Array.from(
+      { length: 2000 },
+      (_, i) => `  - { id: t${i}, title: T, updatedAt: ${at}, values: { tags: *tags } }`,
+    );
+    const text = `version: "1.0"\nx-tags: &tags [a, b, c, d, e, f, g, h]\ntasks:\n${tasks.join("\n")}\n`;
+    expect(parse(text, "yaml").tasks).toHaveLength(2000);
+  });
 });
 
 describe("validation", () => {

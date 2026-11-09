@@ -42,11 +42,14 @@ Requires Node ≥ 20.19 or any modern runtime. ESM only.
 
 ## Development
 
-| Script              | Does                                               |
-| ------------------- | -------------------------------------------------- |
-| `bun run build`     | Bundle to `dist/`, with `.d.mts` and `schema.json` |
-| `bun run test`      | Vitest once (`test:watch` to watch)                |
-| `bun run check`     | lint + format:check + typecheck + test             |
-| `bun run changeset` | Record a change for the next release               |
+| Script              | Does                                                                    |
+| ------------------- | ----------------------------------------------------------------------- |
+| `bun run build`     | Bundle to `dist/`, with `.d.mts` and `schema.json`                      |
+| `bun run test`      | Vitest once (`test:watch` to watch)                                     |
+| `bun run check`     | lint + format:check + typecheck + test                                  |
+| `bun run bench`     | Benchmarks the built package; add `--json` for machine-readable results |
+| `bun run changeset` | Record a change for the next release                                    |
+
+`conformance/` holds language-neutral cases: `errors.yaml` (broken inputs and the issue paths they must report) and `valid.yaml` (unusual inputs and their exact result). Any implementation of the format should pass them; `src/conformance.test.ts` runs them here. `bench/baseline.json` is a reference run (Node 26, Apple silicon) to compare other implementations against.
 
 Run `bun run changeset` in your PR. On merge to `main`, the Release workflow opens a "Version Packages" PR; merging it publishes to npm. The lowest TypeScript version supported for consumers is 6.0.3, and CI typechecks against it.

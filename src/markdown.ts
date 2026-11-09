@@ -71,7 +71,9 @@ export function parseMarkdown(text: string): MarkdownTask {
       },
     ]);
   }
-  const { task, ...frontmatter } = check(frontmatterSchema, decode(parts.data, parts.syntax));
+  // Empty frontmatter is an empty map (js-yaml rejects empty input), so the error names the missing task.
+  const data = parts.data.trim() === "" ? {} : decode(parts.data, parts.syntax);
+  const { task, ...frontmatter } = check(frontmatterSchema, data);
   if (Object.hasOwn(task, "notes")) {
     throw new TasksFormatError([
       { path: ["task", "notes"], message: "notes are the Markdown body, not a frontmatter key" },

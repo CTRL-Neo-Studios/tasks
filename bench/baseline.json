@@ -1,0 +1,114 @@
+{
+  "runtime": "node v26.13.0",
+  "tasks": 1000,
+  "results": [
+    {
+      "name": "parse json (1000 tasks)",
+      "meanMs": 2.2492641748879207,
+      "p99Ms": 2.880013519999902,
+      "opsPerSec": 451.32142218306524
+    },
+    {
+      "name": "parse yaml (1000 tasks)",
+      "meanMs": 6.208451135802455,
+      "p99Ms": 8.761350000000132,
+      "opsPerSec": 162.61760670321706
+    },
+    {
+      "name": "parse toml (1000 tasks)",
+      "meanMs": 5.641876898876433,
+      "p99Ms": 8.273991159999863,
+      "opsPerSec": 179.16884205124305
+    },
+    {
+      "name": "decode only: JSON.parse",
+      "meanMs": 0.5199180852390719,
+      "p99Ms": 0.7801606200002597,
+      "opsPerSec": 1938.7221655116869
+    },
+    {
+      "name": "decode only: js-yaml",
+      "meanMs": 3.981529111111119,
+      "p99Ms": 6.376145749999523,
+      "opsPerSec": 256.5979538178319
+    },
+    {
+      "name": "decode only: smol-toml",
+      "meanMs": 1.686121491582464,
+      "p99Ms": 2.53647400000009,
+      "opsPerSec": 614.014709189361
+    },
+    {
+      "name": "validate (1000 tasks)",
+      "meanMs": 1.7104101023891036,
+      "p99Ms": 2.4304993600004576,
+      "opsPerSec": 596.2335024428376
+    },
+    {
+      "name": "stringify json (1000 tasks)",
+      "meanMs": 2.0371244674797118,
+      "p99Ms": 2.5899996999996815,
+      "opsPerSec": 497.2036838434744
+    },
+    {
+      "name": "stringify yaml (1000 tasks)",
+      "meanMs": 26.458913562500097,
+      "p99Ms": 39.71715054000077,
+      "opsPerSec": 38.507953714307426
+    },
+    {
+      "name": "stringify toml (1000 tasks)",
+      "meanMs": 3.1796007658228373,
+      "p99Ms": 4.017312689999963,
+      "opsPerSec": 318.7991395888627
+    },
+    {
+      "name": "merge (1000 vs 1000, all edited)",
+      "meanMs": 5.231863697916578,
+      "p99Ms": 6.3413874999985635,
+      "opsPerSec": 191.5390782912185
+    },
+    {
+      "name": "occurrences, 1 month (1000 tasks)",
+      "meanMs": 9.01643490624988,
+      "p99Ms": 22.02342804000025,
+      "opsPerSec": 128.91405910695872
+    },
+    {
+      "name": "occurrences, 10 years of one weekly rule",
+      "meanMs": 6.29444057500009,
+      "p99Ms": 19.911594360001143,
+      "opsPerSec": 192.2071316593774
+    },
+    {
+      "name": "toICS (1000 tasks)",
+      "meanMs": 6.072166650602358,
+      "p99Ms": 10.293344999999977,
+      "opsPerSec": 169.48415807589663
+    },
+    {
+      "name": "fromICS (1000 tasks)",
+      "meanMs": 9.40367254687493,
+      "p99Ms": 12.43902378999968,
+      "opsPerSec": 108.06119409395478
+    },
+    {
+      "name": "parseMarkdown (1 file)",
+      "meanMs": 0.006191078477500357,
+      "p99Ms": 0.014457999999649473,
+      "opsPerSec": 185582.23993569004
+    },
+    {
+      "name": "isTaskFile (task file)",
+      "meanMs": 0.004448272970712898,
+      "p99Ms": 0.008166999999957625,
+      "opsPerSec": 249398.10407885117
+    },
+    {
+      "name": "isTaskFile (plain note)",
+      "meanMs": 0.00011339503973801768,
+      "p99Ms": 0.00016700000014679972,
+      "opsPerSec": 9554114.281200813
+    }
+  ]
+}

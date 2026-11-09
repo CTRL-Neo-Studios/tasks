@@ -1,0 +1,194 @@
+# Unusual but valid inputs and exactly what reading them must produce. Shared by every implementation.
+#
+# Each case: `name`, `format` (json | yaml | toml | markdown | ics), `input` text, `expect` result:
+#   json | yaml | toml: the document
+#   markdown: { task, frontmatter, syntax }
+#   ics: the document; nothing may be dropped
+
+- name: json with a byte-order mark and unicode escapes
+  format: json
+  input: "\uFEFF{\"version\":\"1.0\",\"tasks\":[{\"id\":\"caf\\u00e9\",\"title\":\"\\ud83d\\ude00 \\\"quoted\\\"\",\"updatedAt\":\"2026-11-09T10:00:00Z\"}]}"
+  expect:
+    version: "1.0"
+    tasks: [{ id: café, title: '😀 "quoted"', updatedAt: "2026-11-09T10:00:00Z" }]
+
+- name: empty task list and empty title
+  format: json
+  input: '{"version":"1.0","lists":[],"fields":[],"tasks":[{"id":"a","title":"","updatedAt":"2026-11-09T10:00:00Z"}]}'
+  expect:
+    version: "1.0"
+    lists: []
+    fields: []
+    tasks: [{ id: a, title: "", updatedAt: "2026-11-09T10:00:00Z" }]
+
+- name: future minor version and unknown keys are kept
+  format: yaml
+  input: |
+    version: "1.9"
+    x-app: { theme: dark }
+    tasks:
+      - { id: a, title: A, x-sort: 3, updatedAt: 2026-11-09T10:00:00Z }
+  expect:
+    version: "1.9"
+    x-app: { theme: dark }
+    tasks: [{ id: a, title: A, x-sort: 3, updatedAt: "2026-11-09T10:00:00Z" }]
+
+- name: yaml unquoted dates stay strings; comments, anchors and block scalars
+  format: yaml
+  input: |
+    # a hand-written file
+    version: "1.0"
+    tasks:
+      - id: a
+        title: Standup   # trailing comment
+        start: 2026-11-10T09:30
+        duration: PT15M
+        updatedAt: 2026-11-09T10:00:00Z
+        notes: |
+          Line one
+            indented
+        values: { tags: &shared [team, daily] }
+      - id: b
+        title: >
+          Folded
+          title
+        due: 2028-02-29
+        updatedAt: 2026-11-09T10:00:00.123456789Z
+        values: { tags: *shared }
+  expect:
+    version: "1.0"
+    tasks:
+      - id: a
+        title: Standup
+        start: 2026-11-10T09:30
+        duration: PT15M
+        updatedAt: "2026-11-09T10:00:00Z"
+        notes: "Line one\n  indented\n"
+        values: { tags: [team, daily] }
+      - id: b
+        title: "Folded title\n"
+        due: "2028-02-29"
+        updatedAt: "2026-11-09T10:00:00.123456789Z"
+        values: { tags: [team, daily] }
+
+- name: yaml flow style on one line
+  format: yaml
+  input: '{ version: "1.0", tasks: [{ id: a, title: A, values: { progress: 0 }, updatedAt: 2026-11-09T10:00:00Z }] }'
+  expect:
+    version: "1.0"
+    tasks: [{ id: a, title: A, values: { progress: 0 }, updatedAt: "2026-11-09T10:00:00Z" }]
+
+- name: toml native dates become strings; dotted keys, inline tables, literal and multi-line strings
+  format: toml
+  input: |
+    version = "1.0"
+
+    [[tasks]]
+    id = 'C:\literal'
+    title = """
+    Two
+    lines"""
+    start = 2026-11-10T09:30:00
+    due = 2026-11-12
+    timeZone = "Etc/GMT-14"
+    updatedAt = 2026-11-09T10:00:00Z
+    values.status = "doing"
+    recurrence = { freq = "weekly", byDay = [{ day = "tu" }] }
+  expect:
+    version: "1.0"
+    tasks:
+      - id: 'C:\literal'
+        title: "Two\nlines"
+        start: "2026-11-10T09:30:00.000"
+        due: "2026-11-12"
+        timeZone: Etc/GMT-14
+        updatedAt: "2026-11-09T10:00:00.000Z"
+        values: { status: doing }
+        recurrence: { freq: weekly, byDay: [{ day: tu }] }
+
+- name: nine fraction digits and the last second of the day
+  format: yaml
+  input: |
+    version: "1.0"
+    tasks: [{ id: a, title: A, start: 2026-12-31T23:59:59.999999999, updatedAt: 2026-11-09T10:00:00Z }]
+  expect:
+    version: "1.0"
+    tasks:
+      [{ id: a, title: A, start: 2026-12-31T23:59:59.999999999, updatedAt: "2026-11-09T10:00:00Z" }]
+
+- name: open selects, deleted options and deleted fields are valid targets
+  format: yaml
+  input: |
+    version: "1.0"
+    fields:
+      - { id: client, title: Client, type: select, open: true, updatedAt: 2026-11-09T10:00:00Z }
+      - id: stage
+        title: Stage
+        type: select
+        options: [{ id: old, title: Old, updatedAt: 2026-11-09T10:00:00Z, deletedAt: 2026-11-09T10:00:00Z }]
+        updatedAt: 2026-11-09T10:00:00Z
+      - { id: legacy, title: Legacy, type: text, updatedAt: 2026-11-09T10:00:00Z, deletedAt: 2026-11-09T10:00:00Z }
+    tasks: [{ id: a, title: A, values: { client: Anyone Inc., stage: old, legacy: kept }, updatedAt: 2026-11-09T10:00:00Z }]
+  expect:
+    version: "1.0"
+    fields:
+      - { id: client, title: Client, type: select, open: true, updatedAt: "2026-11-09T10:00:00Z" }
+      - id: stage
+        title: Stage
+        type: select
+        options:
+          [
+            {
+              id: old,
+              title: Old,
+              updatedAt: "2026-11-09T10:00:00Z",
+              deletedAt: "2026-11-09T10:00:00Z",
+            },
+          ]
+        updatedAt: "2026-11-09T10:00:00Z"
+      - {
+          id: legacy,
+          title: Legacy,
+          type: text,
+          updatedAt: "2026-11-09T10:00:00Z",
+          deletedAt: "2026-11-09T10:00:00Z",
+        }
+    tasks:
+      [
+        {
+          id: a,
+          title: A,
+          values: { client: Anyone Inc., stage: old, legacy: kept },
+          updatedAt: "2026-11-09T10:00:00Z",
+        },
+      ]
+
+- name: markdown with BOM, CRLF and fence-like lines in the body
+  format: markdown
+  input: "\uFEFF---\r\ntask: { id: a, title: A, updatedAt: 2026-11-09T10:00:00Z }\r\n---  \r\nbody\r\n---\r\n+++\r\n"
+  expect:
+    task: { id: a, title: A, updatedAt: "2026-11-09T10:00:00Z", notes: "body\r\n---\r\n+++\r\n" }
+    frontmatter: {}
+    syntax: yaml
+
+- name: markdown toml frontmatter with other keys and no body
+  format: markdown
+  input: "+++\ndraft = true\n[task]\nid = \"a\"\ntitle = \"A\"\nupdatedAt = 2026-11-09T10:00:00Z\n+++"
+  expect:
+    task: { id: a, title: A, updatedAt: "2026-11-09T10:00:00.000Z" }
+    frontmatter: { draft: true }
+    syntax: toml
+
+- name: ics lowercase names, tab folding, quoted parameters, LF endings
+  format: ics
+  input: "begin:vcalendar\nbegin:vevent\nuid:a\ndtstart;tzid=\"Europe/Berlin\":20261110T090000\nsummary:Fol\n\tded\\, text\nlast-modified:20261101T080000Z\nend:vevent\nend:vcalendar\n"
+  expect:
+    version: "1.0"
+    tasks:
+      - {
+          id: a,
+          title: "Folded, text",
+          start: 2026-11-10T09:00,
+          timeZone: Europe/Berlin,
+          updatedAt: "2026-11-01T08:00:00Z",
+        }

@@ -239,15 +239,20 @@ export function sortKey(v: string): string {
   return s.padEnd(29, "0");
 }
 
+// Building an Intl.DateTimeFormat costs tens of microseconds; only valid zones are cached, so the set stays
+// bounded by the IANA database however many bad names arrive.
+const knownZones = new Set<string>();
+
 function isTimeZone(v: string): boolean {
+  if (knownZones.has(v)) return true;
   if (/^[+-]/.test(v)) return false; // offsets are not IANA zones
   try {
-    return (
-      new Intl.DateTimeFormat("en-US", { timeZone: v }).resolvedOptions().timeZone !== undefined
-    );
+    new Intl.DateTimeFormat("en-US", { timeZone: v }).resolvedOptions();
   } catch {
     return false;
   }
+  knownZones.add(v);
+  return true;
 }
 
 const id = z.string().min(1, "expected a non-empty id");
@@ -335,7 +340,12 @@ const taskSchema = z.looseObject({
   excludedDates: z.array(local).exactOptional(),
   completedAt: utc.exactOptional(),
   values: z
-    .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]))
+    .record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.array(z.string())], {
+        error: "expected text, a finite number, true/false, or a list of strings",
+      }),
+    )
     .exactOptional(),
 });
 
@@ -465,12 +475,10 @@ function checkField(f: FieldDefinition, path: Path, issue: Report): void {
     }
     if (f.min !== undefined && f.max !== undefined && f.min > f.max)
       issue([...path, "max"], "max is below min");
-    if (f.categories)
-      checkUnique(
-        f.categories.map((c) => ({ id: c })),
-        [...path, "categories"],
-        issue,
-      );
+    f.categories?.forEach((c, i) => {
+      if (f.categories!.indexOf(c) !== i)
+        issue([...path, "categories", i], `duplicate category "${c}"`);
+    });
   }
 
   if (f.options === undefined) return;

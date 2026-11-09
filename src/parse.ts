@@ -1,5 +1,6 @@
 import { parse as parseToml, stringify as stringifyToml, TomlDate } from "smol-toml";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { load as loadYaml } from "js-yaml";
+import { stringify as stringifyYaml } from "yaml";
 import type * as z from "zod";
 import { documentSchema, type TaskDocument } from "./schema";
 
@@ -60,9 +61,13 @@ export function decode(text: string, format: Format): unknown {
     switch (format) {
       case "json":
         return JSON.parse(source);
-      case "yaml":
-        // YAML 1.2 core schema (the default) keeps `2026-11-12` a string rather than a Date.
-        return parseYaml(source);
+      case "yaml": {
+        // js-yaml's default YAML 1.2 core schema keeps `2026-11-12` a string rather than a Date; duplicate
+        // keys and multiple documents are errors. ~14x faster than `yaml`, which also builds an editable AST.
+        const value = loadYaml(source);
+        checkExpansion(value, source.length);
+        return value;
+      }
       case "toml":
         return datesToStrings(parseToml(source));
     }
@@ -70,6 +75,22 @@ export function decode(text: string, format: Format): unknown {
     throw new TasksFormatError([
       { path: [], message: `invalid ${format}: ${(error as Error).message}` },
     ]);
+  }
+}
+
+/**
+ * Aliases are kept as shared references, so a few dozen nested ones can stand for billions of values that
+ * validation would then walk. Reject data far larger than its text could hold without aliases.
+ */
+function checkExpansion(value: unknown, sourceLength: number): void {
+  // ponytail: 10 values per source byte plus slack; plain YAML needs at least ~2 bytes per value, so only
+  // heavy alias reuse comes near it. Raise if a real file trips this.
+  let budget = sourceLength * 10 + 10_000;
+  const stack = [value];
+  while (stack.length > 0) {
+    const v = stack.pop();
+    if (--budget < 0) throw new Error("aliases expand to far more data than the text holds");
+    if (v !== null && typeof v === "object") stack.push(...Object.values(v));
   }
 }
 
