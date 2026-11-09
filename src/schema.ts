@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { findCycle } from "./cycle";
 
 /** `2026-11-09`. All-day when used as a task time. */
 export type LocalDate = string;
@@ -231,7 +232,7 @@ const isLocal = (v: string): boolean => {
 const isDateOnly = (v: string): boolean => !v.includes("T");
 
 /** Comparable key for two local values of the same form (seconds and fraction padded). */
-function sortKey(v: string): string {
+export function sortKey(v: string): string {
   if (isDateOnly(v)) return v;
   let s = v.length === 16 ? `${v}:00` : v;
   if (s.length === 19) s += ".";
@@ -427,25 +428,9 @@ function checkAcyclic<T extends { id: string }>(
   key: string,
   issue: Report,
 ): void {
-  const index = new Map(items.map((item, i) => [item.id, i]));
-  const state = new Uint8Array(items.length); // 0 unvisited, 1 on stack, 2 done
-  const visit = (i: number): number | undefined => {
-    if (state[i] === 1) return i;
-    if (state[i] === 2) return undefined;
-    state[i] = 1;
-    for (const target of edges(items[i]!)) {
-      const j = index.get(target);
-      const hit = j === undefined ? undefined : visit(j);
-      if (hit !== undefined) return hit;
-    }
-    state[i] = 2;
-    return undefined;
-  };
-  for (let i = 0; i < items.length; i++) {
-    const hit = visit(i);
-    if (hit !== undefined)
-      return issue([...path, hit, key], `"${items[hit]!.id}" is part of a ${key} cycle`);
-  }
+  const cycle = findCycle(items, edges);
+  if (cycle)
+    issue([...path, cycle[0]!, key], `"${items[cycle[0]!]!.id}" is part of a ${key} cycle`);
 }
 
 const LOCKED_KEYS = ["title", "type", "categories", "open", "min", "max", "deletedAt"] as const;
@@ -555,7 +540,8 @@ function checkTime(t: Task, path: Path, issue: Report): void {
   });
 }
 
-function valueError(f: ResolvedField, v: FieldValue): string | undefined {
+/** Why `v` can't be stored in field `f`, or undefined when it can. */
+export function valueError(f: ResolvedField, v: FieldValue): string | undefined {
   const optionError = (optionId: string): string | undefined =>
     f.open || f.options.some((o) => o.id === optionId)
       ? undefined

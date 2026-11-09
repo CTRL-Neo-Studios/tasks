@@ -1,2 +1,26 @@
-export * from "./schema";
-export * from "./parse";
+export {
+  documentSchema,
+  kindOf,
+  resolveFields,
+  type Duration,
+  type FieldDefinition,
+  type FieldOption,
+  type FieldType,
+  type FieldValue,
+  type Frequency,
+  type Kind,
+  type List,
+  type LocalDate,
+  type LocalDateTime,
+  type Recurrence,
+  type ResolvedField,
+  type ResolvedOption,
+  type Synced,
+  type Task,
+  type TaskDocument,
+  type UTCDateTime,
+  type Weekday,
+} from "./schema";
+export { type Format, type Issue, parse, stringify, TasksFormatError, validate } from "./parse";
+export { merge, type MergeResult, type Repair } from "./merge";
+export { type Occurrence, type OccurrenceRange, occurrences } from "./recurrence";

@@ -46,6 +46,24 @@ Lists, custom fields, field options and tasks are **synced records**:
 
 A deleted record is still a valid reference target. Apps show it as archived or hide it.
 
+### Merging
+
+Two copies of a document merge record by record, so any implementation reaches the same content:
+
+1. Records match by `id` within lists, tasks, custom fields, and each field's options. A record only one side has is kept.
+2. The record with the later `updatedAt` instant wins whole. Compare instants, not text: `…:00Z` equals `…:00.000Z`.
+3. On equal instants, a record with `deletedAt` wins; otherwise the one whose JSON with keys sorted is larger, comparing UTF-16 code units.
+4. A field definition's options merge one by one, independently of which definition won. Built-in field entries have no `updatedAt`, so only their options matter.
+5. Unknown top-level keys follow rule 3's JSON comparison. `version` takes the higher minor.
+
+Two valid copies can still combine into an invalid document. Repair it like this and tell the user what was removed:
+
+- **Cycles** in `parentId` or `dependsOn` (tasks) or `parentId` (lists): within the loop, find the record that wins by rules 2–3 and remove its link to the next record. This undoes the later move.
+- **Options** that don't fit the winning field definition: drop every option when the field is no longer a select; drop an option whose category the field no longer has; remove `category` from options when the field has no categories anymore.
+- **Values** that no longer fit their field (type, range, or an option that was dropped): remove them from `values`.
+
+Order is not synced: a merged collection keeps the first copy's order and appends records only the second copy has.
+
 ## List
 
 | Key        | Type   | Required | Notes                                |

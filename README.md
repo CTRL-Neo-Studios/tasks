@@ -21,6 +21,7 @@ const out = stringify(doc, "json"); // validates first; unknown keys survive
 | `validate(value)`           | Checks an already-parsed object                                           |
 | `resolveFields(doc)`        | Built-in and custom fields with their options                             |
 | `kindOf(task)`              | `"span"`, `"moment"` or `"todo"`                                          |
+| `merge(a, b)`               | Combines two copies for sync: `{ document, repairs }`. See SPEC "Merging" |
 | `documentSchema`            | The Zod schema (cross-field rules included)                               |
 | `@type32/tasks/schema.json` | JSON Schema for editor completion (structure only)                        |
 
