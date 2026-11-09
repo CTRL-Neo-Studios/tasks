@@ -1,30 +1,40 @@
-# ts-lib-template
+# @type32/tasks
 
-TypeScript library template on the VoidZero toolchain: [tsdown](https://tsdown.dev) (build), [Vitest](https://vitest.dev) (test), [Oxlint](https://oxc.rs/docs/guide/usage/linter) + [Oxfmt](https://oxc.rs/docs/guide/usage/formatter) (lint/format). Bun for installs and scripts, [Changesets](https://github.com/changesets/changesets) for releases. Ships ESM only.
+One format for todos, calendar events and timelines. Each one is a **task**; its kind depends only on which time fields it has. The format lets apps define their own statuses, priorities, tags and fields while keeping a fixed meaning other apps can rely on. See [SPEC.md](./SPEC.md).
 
-Minimum supported TypeScript for consumers is **6.0.3** (optional `peerDependencies.typescript`, so plain-JS users aren't affected). CI typechecks against that version; bump both together.
+```ts
+import { kindOf, parse, resolveFields, stringify } from "@type32/tasks";
 
-## Use this template
+const doc = parse(text, "json"); // throws TasksFormatError with each problem's path
+const fields = resolveFields(doc); // built-in fields merged with the document's own
+for (const task of doc.tasks) {
+  const status = fields.status!.options.find((o) => o.id === task.values?.status);
+  console.log(kindOf(task), task.title, status?.category ?? "todo");
+}
+const out = stringify(doc, "json"); // validates first; unknown keys survive
+```
 
-1. Rename `name` in `package.json`, the title above, and the copyright holder in `LICENSE`.
-2. Replace `src/index.ts`.
-3. Add an `NPM_TOKEN` repo secret (or configure npm trusted publishing).
+| Export                      | Does                                               |
+| --------------------------- | -------------------------------------------------- |
+| `parse(text, format)`       | Text → validated `TaskDocument`                    |
+| `stringify(doc, format)`    | Validated `TaskDocument` → text                    |
+| `validate(value)`           | Checks an already-parsed object                    |
+| `resolveFields(doc)`        | Built-in and custom fields with their options      |
+| `kindOf(task)`              | `"span"`, `"moment"` or `"todo"`                   |
+| `documentSchema`            | The Zod schema (cross-field rules included)        |
+| `@type32/tasks/schema.json` | JSON Schema for editor completion (structure only) |
 
-## Scripts
+For YAML editor completion, add `# yaml-language-server: $schema=https://unpkg.com/@type32/tasks/dist/schema.json` to the top of the file.
 
-| Script              | Does                                       |
-| ------------------- | ------------------------------------------ |
-| `bun run build`     | Bundle `src/index.ts` → `dist/` + `.d.mts` |
-| `bun run dev`       | Build in watch mode                        |
-| `bun run test`      | Run Vitest once (`test:watch` to watch)    |
-| `bun run typecheck` | `tsc --noEmit`                             |
-| `bun run lint`      | Oxlint                                     |
-| `bun run format`    | Oxfmt (`format:check` to verify only)      |
-| `bun run check`     | lint + format:check + typecheck + test     |
-| `bun run changeset` | Record a change for the next release       |
+Requires Node ≥ 20.19 or any modern runtime. ESM only.
 
-## Releasing
+## Development
 
-Run `bun run changeset` in your PR. On merge to `main`, the Release workflow opens a "Version Packages" PR; merging that publishes to npm.
+| Script              | Does                                               |
+| ------------------- | -------------------------------------------------- |
+| `bun run build`     | Bundle to `dist/`, with `.d.mts` and `schema.json` |
+| `bun run test`      | Vitest once (`test:watch` to watch)                |
+| `bun run check`     | lint + format:check + typecheck + test             |
+| `bun run changeset` | Record a change for the next release               |
 
-`tsconfig.json` enables `isolatedDeclarations`, so exported functions need explicit return types; in exchange tsdown generates `.d.mts` via Oxc instead of the TypeScript compiler.
+Run `bun run changeset` in your PR. On merge to `main`, the Release workflow opens a "Version Packages" PR; merging it publishes to npm. The lowest TypeScript version supported for consumers is 6.0.3, and CI typechecks against it.

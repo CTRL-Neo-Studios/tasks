@@ -1,7 +1,7 @@
 {
-  "name": "ts-lib-template",
+  "name": "@type32/tasks",
   "version": "0.0.0",
-  "description": "TypeScript library template",
+  "description": "One format for todos, events and timelines: schema, validation and parsing",
   "license": "MIT",
   "files": [
     "dist"
@@ -11,7 +11,8 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./schema.json": "./dist/schema.json"
   },
   "scripts": {
     "build": "tsdown",
@@ -26,6 +27,9 @@
     "changeset": "changeset",
     "release": "bun run build && changeset publish",
     "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
