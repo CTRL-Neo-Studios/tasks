@@ -1,6 +1,6 @@
 {
   "name": "@type32/tasks",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "One format for todos, events and timelines: schema, validation and parsing",
   "license": "MIT",
   "files": [
