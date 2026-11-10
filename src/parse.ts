@@ -4,13 +4,19 @@ import { stringify as stringifyYaml } from "yaml";
 import type * as z from "zod";
 import { documentSchema, type TaskDocument } from "./schema";
 
+/** Text formats for whole documents. Markdown task files and iCalendar have their own functions. */
 export type Format = "json" | "yaml" | "toml";
 
+/** One problem: where (`["tasks", 3, "values", "status"]`; `[]` is the root) and what, in plain English. */
 export interface Issue {
   path: (string | number)[];
   message: string;
 }
 
+/**
+ * Thrown for any input the format rejects: syntax errors, wrong shapes, broken rules. `message` lists every
+ * issue as `path: message` lines, ready to show to a user; `issues` has them structured.
+ */
 export class TasksFormatError extends Error {
   readonly issues: Issue[];
 
@@ -45,6 +51,7 @@ export function check<T>(schema: z.ZodType<T>, value: unknown, prefix: Issue["pa
   );
 }
 
+/** Reads and validates a whole document. Throws `TasksFormatError`. Dates and times come back as strings. */
 export function parse(text: string, format: Format): TaskDocument {
   return validate(decode(text, format));
 }

@@ -23,6 +23,18 @@ export {
 } from "./schema";
 export { type Format, type Issue, parse, stringify, TasksFormatError, validate } from "./parse";
 export { merge, type MergeResult, type Repair } from "./merge";
-export { type Occurrence, type OccurrenceRange, occurrences } from "./recurrence";
+export { completeTask, type Occurrence, type OccurrenceRange, occurrences } from "./recurrence";
 export { fromICS, type ImportResult, toICS } from "./ics";
 export { isTaskFile, type MarkdownTask, parseMarkdown, stringifyMarkdown } from "./markdown";
+export {
+  blockers,
+  type Fields,
+  isComplete,
+  isOpen,
+  isOverdue,
+  type OverdueOptions,
+  priorityOf,
+  statusOf,
+  type TaskPriority,
+  type TaskStatus,
+} from "./predicates";

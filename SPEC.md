@@ -128,7 +128,12 @@ Expanding a rule:
 - `count` includes occurrences removed by `excludedDates`.
 - `end` and `due` move with each occurrence by their offset from `start`.
 
-Completing a recurring todo moves its anchor to the next occurrence.
+Completing a recurring todo moves it to the next occurrence instead of marking it done:
+
+- `start`, `end` and `due` move to the next occurrence after the anchor, keeping their offsets from it. The anchor moves to the rule's wall-clock time, not a DST-adjusted one, so the series keeps its time of day.
+- `count` drops by the number of occurrences used up, excluded ones included, so the remaining series is unchanged.
+- `status` and `progress`, if set, reset to `todo` and 0. `completedAt` is left alone.
+- With no occurrence left, the task is completed like a one-off task: `status: done` and `completedAt` set.
 
 ## Fields
 

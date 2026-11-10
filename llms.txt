@@ -1,0 +1,43 @@
+# @type32/tasks
+
+> TypeScript library and file format that unifies todos, calendar events and timelines as one object, the task. It parses and validates JSON, YAML and TOML documents and Markdown task files, merges copies for sync, expands recurrence across time zones, and converts to and from iCalendar. ESM only; `import { … } from "@type32/tasks"`.
+
+A task's kind comes from its time fields, never a type field: `start` plus `end` or `duration` is a span (event or timeline bar), `start` alone is a moment (milestone), and no `start` is a todo (optionally with `due`).
+
+## Rules for writing documents
+
+- Top level: `{ version: "1.0", lists?: List[], fields?: FieldDefinition[], tasks: Task[] }`.
+- Every task, list, custom field and field option needs `id` (UUID recommended) and `updatedAt`. Set `updatedAt` to the current UTC time on every change.
+- Delete by setting `deletedAt` (UTC); never remove a record that others may reference.
+- Time formats:
+  - `start`, `end`, `due`, `until` and `excludedDates` are local: `2026-11-12` (all-day) or `2026-11-12T09:30` (wall clock in `timeZone`; floating without one). Never put an offset or `Z` on these.
+  - `updatedAt`, `completedAt` and `deletedAt` are UTC with `Z`.
+- `end` needs `start`, must be the same form (both dates or both date-times), and can't come before it. A date `end` is inclusive. Use `end` or `duration` (ISO 8601 such as `PT1H30M`, `P1D`, `P2W`; never years or months), not both.
+- `timeZone` is an IANA name (`Europe/Berlin`), never an offset.
+- `recurrence`: `{ freq: daily|weekly|monthly|yearly, interval?, byDay?: [{ day: mo…su, nth? }], byMonthDay?, byMonth?, count? | until? }`.
+  - It needs `start` or `due`.
+  - `nth` only with monthly or yearly.
+  - Any other key is an error.
+- Statuses, priorities, tags and custom fields all go in `task.values`:
+  - Built-ins: `status: todo|doing|done|cancelled`, `priority: low|medium|high`, `tags: string[]`, `progress: 0–100`, `location: string`.
+  - A custom field or custom option must be defined under `fields` before use. A custom status option maps to a built-in category: `{ id: shipped, title: Shipped, category: done, updatedAt }`.
+- Colors are `#rrggbb`.
+- Unknown keys anywhere are kept, except inside `recurrence`, where they're an error.
+
+## Rules for writing code
+
+- Dates are strings throughout; the library never returns `Date` objects.
+- `parse`, `stringify`, `validate`, `parseMarkdown`, `stringifyMarkdown`, `toICS` and `fromICS` throw `TasksFormatError` (`.issues: { path, message }[]`; `.message` is ready to show). `isTaskFile` never throws.
+- Resolve `const fields = resolveFields(doc)` once, then use the helpers instead of comparing ids, because custom options like `shipped` mean `done`. The helpers: `statusOf(task, fields)` (todo|doing|done|cancelled), `priorityOf`, `isComplete`, `isOpen` (not deleted, todo or doing), `isOverdue(task, fields, { now?, timeZone? })` and `blockers(task, doc.tasks, fields)`. For other fields, read `fields[id].options` and each option's `.category`.
+- To draw a calendar or timeline, call `occurrences(task, { from, to, timeZone? })` for each task (`to` is exclusive). Don't expand recurrence by hand.
+- To complete a task, use `completeTask(task, new Date().toISOString())`. It returns a new task: repeating tasks move to their next occurrence, everything else becomes `status: done`. Don't move recurring dates by hand.
+- For sync, call `merge(local, remote)`. It returns `{ document, repairs }`; show `repairs` to the user.
+- `parseMarkdown` checks one file only. Combine tasks from many files with `validate({ version: "1.0", lists, fields, tasks })` to check references and values.
+- `fromICS` returns `{ document, dropped }`; `dropped` lists what couldn't be imported.
+
+## Docs
+
+- [README.md](./README.md): usage guide with examples for each job, common mistakes, API table
+- [SPEC.md](./SPEC.md): the format specification, with every field, rule, the merge algorithm, recurrence expansion and the iCalendar mapping
+- [dist/index.d.mts](./dist/index.d.mts): type declarations with a doc comment on every export and field
+- [conformance/errors.yaml](./conformance/errors.yaml), [conformance/valid.yaml](./conformance/valid.yaml): example inputs with exact expected results

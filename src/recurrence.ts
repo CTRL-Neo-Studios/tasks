@@ -1,5 +1,5 @@
 import { Temporal } from "temporal-polyfill"; // uses native Temporal when the runtime has it
-import type { LocalDate, LocalDateTime, Recurrence, Task, Weekday } from "./schema";
+import type { LocalDate, LocalDateTime, Recurrence, Task, UTCDateTime, Weekday } from "./schema";
 
 /** One occurrence in the task's own local form; `end` is inclusive for all-day tasks, like `Task.end`. */
 export interface Occurrence {
@@ -100,6 +100,65 @@ export function occurrences(task: Task, range: OccurrenceRange): Occurrence[] {
     result.push(built);
   }
   return result;
+}
+
+/**
+ * Completes a task, returning a new one (the input is unchanged); `updatedAt` becomes `completedAt`.
+ * - Recurring with occurrences left: `start`, `end` and `due` move to the next occurrence (by their offsets
+ *   from the anchor), `count` drops by the occurrences used up, `status` and `progress` (if set) reset to
+ *   `todo` and 0. `completedAt` is left alone: the series isn't done.
+ * - Otherwise, including the last occurrence: `status` becomes `done` and `completedAt` is set.
+ */
+export function completeTask(task: Task, completedAt: UTCDateTime): Task {
+  const anchorText = task.start ?? task.due;
+  const rule = task.recurrence;
+  const next =
+    rule && anchorText !== undefined
+      ? nextAfterAnchor(task, PlainDateTime.from(anchorText), rule)
+      : undefined;
+  if (!next)
+    return {
+      ...task,
+      completedAt,
+      updatedAt: completedAt,
+      values: { ...task.values, status: "done" },
+    };
+
+  // Move by wall clock from the raw rule time, never a DST-adjusted one, so the series keeps its time of day.
+  const anchor = PlainDateTime.from(anchorText!);
+  const moved = (value: string): string =>
+    format(next.at.add(anchor.until(PlainDateTime.from(value), { largestUnit: "days" })), value);
+  const out: Task = { ...task, updatedAt: completedAt };
+  if (task.start !== undefined) out.start = moved(task.start);
+  if (task.end !== undefined) out.end = moved(task.end);
+  if (task.due !== undefined) out.due = moved(task.due);
+  if (rule!.count !== undefined) out.recurrence = { ...rule!, count: rule!.count - next.used };
+  if (task.values) {
+    out.values = { ...task.values };
+    if (out.values["status"] !== undefined) out.values["status"] = "todo";
+    if (out.values["progress"] !== undefined) out.values["progress"] = 0;
+  }
+  return out;
+}
+
+/** The first occurrence after the anchor, and how many occurrences (excluded ones included) precede it. */
+function nextAfterAnchor(
+  task: Task,
+  anchor: DateTime,
+  rule: Recurrence,
+): { at: DateTime; used: number } | undefined {
+  const until = rule.until === undefined ? undefined : PlainDateTime.from(rule.until);
+  // ponytail: an open-ended rule matching no dates scans 1000 years before giving up (~0.5 s for daily rules).
+  const limit = until ?? anchor.add({ years: 1000 });
+  const excluded = new Set(task.excludedDates?.map((d) => PlainDateTime.from(d).toString()));
+  let index = -1;
+  for (const at of recur(anchor, rule, limit)) {
+    index++;
+    if (until && PlainDateTime.compare(at, until) > 0) return undefined;
+    if (rule.count !== undefined && index >= rule.count) return undefined;
+    if (index > 0 && !excluded.has(at.toString())) return { at, used: index };
+  }
+  return undefined;
 }
 
 /** Keeps the source's form: date-only stays a date, a time written without seconds stays without them. */

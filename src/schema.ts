@@ -10,81 +10,127 @@ export type UTCDateTime = string;
 /** ISO 8601 duration without years or months: `PT1H30M`, `P1D`, `P2W`. */
 export type Duration = string;
 
+/** Value type of a field. `select`/`multiSelect` values are option ids. */
 export type FieldType = "text" | "number" | "boolean" | "date" | "url" | "select" | "multiSelect";
+/** A value in `Task.values`: text, a finite number, a boolean, or a list of option ids (multiSelect). */
 export type FieldValue = string | number | boolean | string[];
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
+/** Weeks start on Monday. */
 export type Weekday = "mo" | "tu" | "we" | "th" | "fr" | "sa" | "su";
-/** Derived from which time fields a task has; never stored. */
+/**
+ * Derived from which time fields a task has; never stored (see `kindOf`).
+ * - `span`: `start` plus `end` or `duration` (calendar event, timeline bar)
+ * - `moment`: `start` only (milestone)
+ * - `todo`: no `start` (reminder, optionally with `due`)
+ */
 export type Kind = "span" | "moment" | "todo";
 
 /** Anything `merge()` can reconcile: identified, timestamped, soft-deleted. */
 export interface Synced {
+  /** Unique within its collection. Use UUIDs for anything that syncs. */
   id: string;
+  /** Set to the current UTC time on every change; `merge()` keeps the later one. */
   updatedAt: UTCDateTime;
+  /** Soft delete: the record stays so references to it remain valid. Hide or archive it in UIs. */
   deletedAt?: UTCDateTime;
   /** Unknown keys are kept and written back. */
   [key: string]: unknown;
 }
 
+/** A container: todo list, calendar, or timeline project. */
 export interface List extends Synced {
   title: string;
+  /** `#rrggbb`. */
   color?: string;
+  /** Parent list; lists nest. No cycles. */
   parentId?: string;
 }
 
+/** A choice of a select field. Each option is its own synced record. */
 export interface FieldOption extends Synced {
+  /** Required, except when only recoloring or renaming a built-in option. */
   title?: string;
+  /** `#rrggbb`. */
   color?: string;
+  /** The fixed meaning this option maps to; one of the field's `categories` (e.g. `done` for status). */
   category?: string;
 }
 
 /**
+ * A custom field, or options added to a built-in one.
  * Built-in ids (`status`, `priority`, `tags`, `progress`, `location`) only take `options`;
- * everything else needs `title`, `type`, `updatedAt`.
+ * custom fields need `title`, `type`, `updatedAt`.
  */
 export interface FieldDefinition {
+  /** The key used in `Task.values`. */
   id: string;
   title?: string;
   type?: FieldType;
+  /** Select types only: the fixed meanings options must map to. */
   categories?: string[];
+  /** Select types only: allow values that aren't option ids (free-text tags). */
   open?: boolean;
+  /** Number type only. */
   min?: number;
+  /** Number type only. */
   max?: number;
+  /** Select types only. */
   options?: FieldOption[];
   updatedAt?: UTCDateTime;
   deletedAt?: UTCDateTime;
   [key: string]: unknown;
 }
 
+/** Repeats the task's anchor: `start`, or `due` without a `start`. Expand with `occurrences()`. */
 export interface Recurrence {
   freq: Frequency;
+  /** Every n-th period; default 1. */
   interval?: number;
-  /** `nth` (e.g. 2 = second, -1 = last) only with monthly/yearly. */
+  /** Weekdays; `nth` (2 = second, -1 = last) only with monthly/yearly. */
   byDay?: { day: Weekday; nth?: number }[];
+  /** Days of the month, ±1…31; negative counts from the end. Missing dates (the 31st in April) are skipped. */
   byMonthDay?: number[];
+  /** Months 1…12. */
   byMonth?: number[];
+  /** Total occurrences including the anchor and excluded ones. Not with `until`. */
   count?: number;
+  /** Last possible occurrence, inclusive; same form (date or date-time) as the anchor. Not with `count`. */
   until?: LocalDate | LocalDateTime;
 }
 
+/** A todo, event, or timeline item: which one depends only on its time fields (see `Kind`). */
 export interface Task extends Synced {
   title: string;
+  /** Free text; the Markdown body for task files. */
   notes?: string;
   listId?: string;
+  /** Parent task (subtask). No cycles. */
   parentId?: string;
+  /** Tasks that must finish before this one. No cycles. */
   dependsOn?: string[];
+  /** Date means all-day; date-time is wall-clock time in `timeZone`. */
   start?: LocalDate | LocalDateTime;
+  /** Needs `start`, same form, not before it. A date `end` is inclusive (10th–12th is three days). Not with `duration`. */
   end?: LocalDate | LocalDateTime;
+  /** Needs `start`. All-day tasks take whole days or weeks. Not with `end`. */
   duration?: Duration;
   due?: LocalDate | LocalDateTime;
+  /** IANA zone (`Europe/Berlin`) for every local time on the task. Absent: floating (same wall clock everywhere). */
   timeZone?: string;
   recurrence?: Recurrence;
+  /** Occurrences to skip, same form as the anchor. Needs `recurrence`. */
   excludedDates?: (LocalDate | LocalDateTime)[];
   completedAt?: UTCDateTime;
+  /**
+   * Field id → value, built-in (`status`, `priority`, `tags`, `progress`, `location`) and custom alike.
+   * A key must name a field; a select value must be an option id. Read meanings with `resolveFields()`.
+   */
   values?: Record<string, FieldValue>;
 }
 
+/** A whole file: lists, field definitions and tasks. */
 export interface TaskDocument {
+  /** `"1.0"`; readers accept any `1.x`. */
   version: string;
   lists?: List[];
   fields?: FieldDefinition[];
@@ -92,6 +138,7 @@ export interface TaskDocument {
   [key: string]: unknown;
 }
 
+/** An option after built-in defaults and document overrides are applied. */
 export interface ResolvedOption {
   id: string;
   title: string;
@@ -203,6 +250,7 @@ export function resolveFields(doc: Pick<TaskDocument, "fields">): Record<string,
   return out;
 }
 
+/** `span`, `moment` or `todo`, from the task's time fields. Use it to pick how to draw a task. */
 export function kindOf(task: Pick<Task, "start" | "end" | "duration">): Kind {
   if (task.start === undefined) return "todo";
   return task.end !== undefined || task.duration !== undefined ? "span" : "moment";

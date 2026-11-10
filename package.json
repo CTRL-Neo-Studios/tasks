@@ -4,7 +4,10 @@
   "description": "One format for todos, events and timelines: schema, validation and parsing",
   "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "SPEC.md",
+    "llms.txt",
+    "conformance"
   ],
   "type": "module",
   "sideEffects": false,
