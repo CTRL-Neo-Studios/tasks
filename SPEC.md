@@ -1,4 +1,4 @@
-# Tasks format 1.0
+# Tasks format 1.1
 
 One document format for todos, calendar events and timelines. A todo, an event and a timeline bar are the same object, a **task**; which one it is depends only on which time fields it has. Field names and meanings follow [JSCalendar (RFC 8984)](https://www.rfc-editor.org/rfc/rfc8984) where they overlap, so conversion stays mechanical.
 
@@ -7,9 +7,10 @@ A document can be written as JSON, YAML or TOML; the data model is identical. Ev
 ## Document
 
 ```yaml
-version: "1.0"
+version: "1.1"
 lists: [] # optional
 fields: [] # optional
+views: [] # optional
 tasks: []
 ```
 
@@ -18,7 +19,10 @@ tasks: []
 | `version` | string             | yes      | `"1.<minor>"`. Readers reject other majors.           |
 | `lists`   | [List](#list)[]    | no       | Containers: todo lists, calendars, timeline projects. |
 | `fields`  | [Field](#fields)[] | no       | Custom fields, and options added to built-in ones.    |
+| `views`   | [View](#view)[]    | no       | Saved ways of showing the tasks: boards, calendars…   |
 | `tasks`   | [Task](#task)[]    | yes      |                                                       |
+
+Version 1.1 added `views` and a task's `starred`. A 1.0 reader keeps both as unknown keys.
 
 Every object in the format keeps keys it doesn't define. Readers must write unknown keys back unchanged.
 
@@ -36,7 +40,7 @@ Every object in the format keeps keys it doesn't define. Readers must write unkn
 
 ## Sync bookkeeping
 
-Lists, custom fields, field options and tasks are **synced records**:
+Lists, views, custom fields, field options and tasks are **synced records**:
 
 | Key         | Type        | Required | Notes                                                                  |
 | ----------- | ----------- | -------- | ---------------------------------------------------------------------- |
@@ -50,7 +54,7 @@ A deleted record is still a valid reference target. Apps show it as archived or 
 
 Two copies of a document merge record by record, so any implementation reaches the same content:
 
-1. Records match by `id` within lists, tasks, custom fields, and each field's options. A record only one side has is kept.
+1. Records match by `id` within lists, views, tasks, custom fields, and each field's options. A record only one side has is kept.
 2. The record with the later `updatedAt` instant wins whole. Compare instants, not text: `…:00Z` equals `…:00.000Z`.
 3. On equal instants, a record with `deletedAt` wins; otherwise the one whose JSON with keys sorted is larger, comparing UTF-16 code units.
 4. A field definition's options merge one by one, independently of which definition won. Built-in field entries have no `updatedAt`, so only their options matter.
@@ -61,6 +65,7 @@ Two valid copies can still combine into an invalid document. Repair it like this
 - **Cycles** in `parentId` or `dependsOn` (tasks) or `parentId` (lists): within the loop, find the record that wins by rules 2–3 and remove its link to the next record. This undoes the later move.
 - **Options** that don't fit the winning field definition: drop every option when the field is no longer a select; mark deleted an option whose category the field no longer has (values using it stay valid); remove `category` from options when the field has no categories anymore.
 - **Values** that no longer fit their field (type or range): remove them from `values`.
+- **Views** grouped or sorted by a field that no longer can be (its type changed): remove `groupBy` or `sortBy`.
 
 Every record a repair changes gets `updatedAt` one millisecond later than its own. The repaired version then wins against both copies it came from, so merging a stale copy again doesn't undo the repair, and every device still computes the same result.
 
@@ -73,6 +78,27 @@ Order is not synced: a merged collection keeps the first copy's order and append
 | `title`    | string | yes      |                                      |
 | `color`    | Color  | no       |                                      |
 | `parentId` | Id     | no       | Another list; lists nest. No cycles. |
+
+## View
+
+A saved way of showing the tasks, so every app that opens the document shows the same board or calendar. Apps keep their own settings for a view on it, as extra keys.
+
+| Key              | Type    | Notes                                                                                                                                                                    |
+| ---------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`          | string  | Required.                                                                                                                                                                |
+| `type`           | string  | Required, non-empty. `list`, `board`, `calendar`, `timeline` or `table`. Apps skip a view of a type they don't draw, and keep it.                                        |
+| `groupBy`        | string  | Sections, columns or rows: `listId`, `starred`, or `values.<field id>` of a `select`, `multiSelect` or `boolean` field. A task with several tags is in each tag's group. |
+| `sortBy`         | string  | `title`, `start`, `end`, `due`, `completedAt`, `updatedAt`, `starred`, or `values.<field id>` of any field but a `multiSelect`. Absent: document order.                  |
+| `sortDescending` | boolean |                                                                                                                                                                          |
+| `listIds`        | Id[]    | Only tasks in these lists or lists nested in them. Each must name a list. Absent: every task.                                                                            |
+| `openOnly`       | boolean | Only open tasks: status `todo` or `doing`.                                                                                                                               |
+| `scale`          | string  | Calendar: the period a page shows. Timeline: the period a column stands for. `day`, `week` or `month`; an app uses its default for a value it doesn't know.              |
+
+A view never shows deleted tasks. Sorting:
+
+- Times sort as written, ignoring time zones: by the padded local value, so a date comes before the times on its day. UTC times sort by instant.
+- A `select` sorts by its options' order (built-in options first, then the document's), a value outside the options after them; `boolean` false before true, and `starred` too, absent counting as false; text in the reader's locale.
+- Tasks without the value come last in either direction. Ties keep document order.
 
 ## Task
 
@@ -91,6 +117,7 @@ Order is not synced: a merged collection keeps the first copy's order and append
 | `recurrence`    | [Recurrence](#recurrence)      | Needs `start` or `due`.                                                                                                                                                                      |
 | `excludedDates` | (LocalDate \| LocalDateTime)[] | Occurrences to skip. Needs `recurrence`; same form as the anchor.                                                                                                                            |
 | `completedAt`   | UTCDateTime                    |                                                                                                                                                                                              |
+| `starred`       | boolean                        | Marked to stand out (a star or a flag).                                                                                                                                                      |
 | `values`        | object                         | Field id → value. See [Fields](#fields).                                                                                                                                                     |
 
 ### Kind
@@ -255,7 +282,7 @@ A task exports as a **VEVENT** when it has `start`, no `due`, and no status othe
 
 Time zones are referenced by IANA name without `VTIMEZONE` blocks (RFC 7809). On import, every time is converted to the zone of `DTSTART` (or `DUE`).
 
-**Lost on export:** lists, custom fields, custom status and priority options (exported as their category), unknown keys, deleted tasks.
+**Lost on export:** lists, views, custom fields, custom status and priority options (exported as their category), `starred`, unknown keys, deleted tasks.
 
 **Dropped on import, and reported:**
 

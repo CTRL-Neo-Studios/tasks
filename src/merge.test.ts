@@ -148,3 +148,30 @@ test("an option whose category was removed is marked deleted; values using it st
 test("the higher minor version wins", () => {
   expect(merge(doc([]), doc([], { version: "1.2" })).document.version).toBe("1.2");
 });
+
+test("a view grouped by a field that stopped being a select loses its grouping", () => {
+  const stage = (type: "select" | "text", minute: number) => ({
+    id: "stage",
+    title: "Stage",
+    type,
+    updatedAt: t(minute),
+  });
+  const view = {
+    id: "v",
+    title: "Board",
+    type: "board",
+    groupBy: "values.stage",
+    sortBy: "values.stage",
+    updatedAt: t(1),
+  };
+  const a = doc([], { fields: [stage("select", 1)], views: [view] });
+  const b = doc([], { fields: [stage("text", 2)] });
+  const { document, repairs } = merge(a, b);
+  expect(repairs.map((r) => [r.path, r.removed])).toEqual([
+    [["views", 0, "groupBy"], "values.stage"],
+  ]);
+  // A text field still sorts; the repaired view beats both copies.
+  expect(document.views).toEqual([
+    { id: "v", title: "Board", type: "board", sortBy: "values.stage", updatedAt: t(1, ".001") },
+  ]);
+});

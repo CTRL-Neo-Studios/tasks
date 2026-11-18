@@ -7,6 +7,8 @@ import {
   sortKey,
   type TaskDocument,
   valueError,
+  VIEW_KEYS,
+  viewKeyError,
 } from "./schema";
 
 /** Something `merge()` changed so the merged document stays valid. `removed` holds the dropped data. */
@@ -27,10 +29,10 @@ interface Stamped {
   deletedAt?: string;
 }
 
-const CORE_KEYS = new Set(["version", "lists", "fields", "tasks"]);
+const CORE_KEYS = new Set(["version", "lists", "fields", "views", "tasks"]);
 
 /**
- * Merges two copies of a document record by record: lists, tasks, custom fields and each field option.
+ * Merges two copies of a document record by record: lists, tasks, views, custom fields and each field option.
  * The later `updatedAt` wins; on a tie the deleted record wins, then the larger canonical JSON, so the
  * content is the same whichever side runs the merge. Record order follows `a`, with records new in `b` appended.
  *
@@ -55,6 +57,7 @@ export function merge(a: TaskDocument, b: TaskDocument): MergeResult {
   if (x.lists || y.lists) doc.lists = mergeRecords(x.lists, y.lists);
   if (x.fields || y.fields)
     doc.fields = mergeRecords(x.fields, y.fields).map((f) => withOptions(f, x, y));
+  if (x.views || y.views) doc.views = mergeRecords(x.views, y.views);
   doc.tasks = mergeRecords(x.tasks, y.tasks);
 
   const repairs: Repair[] = [];
@@ -64,6 +67,7 @@ export function merge(a: TaskDocument, b: TaskDocument): MergeResult {
   breakCycles(doc.tasks, "tasks", "dependsOn", repairs);
   repairOptions(doc, repairs);
   repairValues(doc, repairs);
+  repairViews(doc, repairs);
 
   // Re-validating proves the repairs covered every conflict; a throw here is a bug in merge().
   return { document: validate(doc), repairs };
@@ -206,5 +210,22 @@ function repairValues(doc: TaskDocument, repairs: Repair[]): void {
     }
     if (changed) bump(t);
     if (Object.keys(t.values).length === 0) delete t.values;
+  });
+}
+
+/** A view grouped or sorted by a field whose definition changed type. */
+function repairViews(doc: TaskDocument, repairs: Repair[]): void {
+  const fields = resolveFields(doc);
+  doc.views?.forEach((v, i) => {
+    let changed = false;
+    for (const use of VIEW_KEYS) {
+      const key = v[use];
+      const error = key === undefined ? undefined : viewKeyError(key, use, fields);
+      if (error === undefined) continue;
+      repairs.push({ path: ["views", i, use], message: error, removed: key });
+      delete v[use];
+      changed = true;
+    }
+    if (changed) bump(v);
   });
 }

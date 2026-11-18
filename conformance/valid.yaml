@@ -163,6 +163,48 @@
         },
       ]
 
+- name: views of a type and scale no reader draws, an app's keys, a deleted field to group by, and a starred task
+  format: yaml
+  input: |
+    version: "1.1"
+    lists: [{ id: work, title: Work, updatedAt: 2026-11-09T10:00:00Z }]
+    fields:
+      - { id: done, title: Done, type: boolean, updatedAt: 2026-11-09T10:00:00Z, deletedAt: 2026-11-09T10:00:00Z }
+    views:
+      - { id: m, title: Map, type: map, scale: quarter, x-app: { zoom: 3 }, updatedAt: 2026-11-09T10:00:00Z }
+      - { id: b, title: Board, type: board, groupBy: values.done, sortBy: completedAt, listIds: [work], updatedAt: 2026-11-09T10:00:00Z }
+    tasks: [{ id: a, title: A, starred: true, updatedAt: 2026-11-09T10:00:00Z }]
+  expect:
+    version: "1.1"
+    lists: [{ id: work, title: Work, updatedAt: "2026-11-09T10:00:00Z" }]
+    fields:
+      - {
+          id: done,
+          title: Done,
+          type: boolean,
+          updatedAt: "2026-11-09T10:00:00Z",
+          deletedAt: "2026-11-09T10:00:00Z",
+        }
+    views:
+      - {
+          id: m,
+          title: Map,
+          type: map,
+          scale: quarter,
+          x-app: { zoom: 3 },
+          updatedAt: "2026-11-09T10:00:00Z",
+        }
+      - {
+          id: b,
+          title: Board,
+          type: board,
+          groupBy: values.done,
+          sortBy: completedAt,
+          listIds: [work],
+          updatedAt: "2026-11-09T10:00:00Z",
+        }
+    tasks: [{ id: a, title: A, starred: true, updatedAt: "2026-11-09T10:00:00Z" }]
+
 - name: markdown with BOM, CRLF and fence-like lines in the body
   format: markdown
   input: "\uFEFF---\r\ntask: { id: a, title: A, updatedAt: 2026-11-09T10:00:00Z }\r\n---  \r\nbody\r\n---\r\n+++\r\n"

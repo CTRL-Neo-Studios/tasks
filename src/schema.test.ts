@@ -36,12 +36,27 @@ const doc = (): TaskDocument => ({
     },
     { id: "estimate", title: "Estimate", type: "number", min: 0, updatedAt: at },
   ],
+  views: [
+    {
+      id: "board",
+      title: "Board",
+      type: "board",
+      groupBy: "values.status",
+      sortBy: "values.priority",
+      sortDescending: true,
+      listIds: ["clients"],
+      openOnly: true,
+      scale: "week",
+      updatedAt: at,
+    },
+  ],
   tasks: [
     {
       id: "invoice",
       title: "Ship invoice",
       listId: "acme",
       due: "2026-11-12",
+      starred: true,
       values: {
         status: "shipped",
         priority: "high",
@@ -181,6 +196,37 @@ describe("rejects", () => {
       (d) => (task(d, 0).values!["constructor"] = "x"),
       'unknown field "constructor"',
     ],
+    [
+      "view grouped by a number field",
+      (d) => (d.views![0]!.groupBy = "values.estimate"),
+      "views.0.groupBy: can't group by a number field",
+    ],
+    [
+      "view grouped by a title",
+      (d) => (d.views![0]!.groupBy = "title"),
+      "views.0.groupBy: expected",
+    ],
+    [
+      "view sorted by a bare field id",
+      (d) => (d.views![0]!.sortBy = "priority"),
+      "views.0.sortBy: expected one of",
+    ],
+    [
+      "view sorted by a multiSelect",
+      (d) => (d.views![0]!.sortBy = "values.tags"),
+      "can't sort by a multiSelect field",
+    ],
+    [
+      "view sorted by an undefined field",
+      (d) => (d.views![0]!.sortBy = "values.nope"),
+      'views.0.sortBy: unknown field "nope"',
+    ],
+    [
+      "view of an unknown list",
+      (d) => (d.views![0]!.listIds = ["nope"]),
+      'views.0.listIds.0: unknown list "nope"',
+    ],
+    ["empty view type", (d) => (d.views![0]!.type = ""), "views.0.type:"],
   ];
   test.each(cases)("%s", (_, change, expected) => {
     expect(issuesOf(change).join("\n")).toContain(expected);

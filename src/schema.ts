@@ -46,6 +46,27 @@ export interface List extends Synced {
   parentId?: string;
 }
 
+/**
+ * A saved way of showing the document's tasks, shared by every app that reads the document. Apps keep their own
+ * settings on it as extra keys. Pick its tasks with `viewTasks()`.
+ */
+export interface View extends Synced {
+  title: string;
+  /** `list`, `board`, `calendar`, `timeline` or `table`. Apps skip, and keep, views of a type they don't draw. */
+  type: string;
+  /** Sections, columns or rows: `listId`, `starred`, or `values.<field id>` of a select, multiSelect or boolean field. */
+  groupBy?: string;
+  /** `title`, `start`, `end`, `due`, `completedAt`, `updatedAt`, `starred`, or `values.<field id>` of any field but a multiSelect. Absent: document order. */
+  sortBy?: string;
+  sortDescending?: boolean;
+  /** Only tasks in these lists or lists nested in them. Absent: every task. */
+  listIds?: string[];
+  /** Only open tasks (`isOpen`): done and cancelled ones hidden. */
+  openOnly?: boolean;
+  /** Calendar: the period a page shows. Timeline: the period a column stands for. `day`, `week` or `month`; apps use their default for one they don't know. */
+  scale?: string;
+}
+
 /** A choice of a select field. Each option is its own synced record. */
 export interface FieldOption extends Synced {
   /** Required, except when only recoloring or renaming a built-in option. */
@@ -121,6 +142,8 @@ export interface Task extends Synced {
   /** Occurrences to skip, same form as the anchor. Needs `recurrence`. */
   excludedDates?: (LocalDate | LocalDateTime)[];
   completedAt?: UTCDateTime;
+  /** Marked to stand out (a star or a flag). */
+  starred?: boolean;
   /**
    * Field id → value, built-in (`status`, `priority`, `tags`, `progress`, `location`) and custom alike.
    * A key must name a field; a select value must be an option id. Read meanings with `resolveFields()`.
@@ -128,12 +151,13 @@ export interface Task extends Synced {
   values?: Record<string, FieldValue>;
 }
 
-/** A whole file: lists, field definitions and tasks. */
+/** A whole file: lists, field definitions, views and tasks. */
 export interface TaskDocument {
-  /** `"1.0"`; readers accept any `1.x`. */
+  /** `"1.1"`; readers accept any `1.x`. */
   version: string;
   lists?: List[];
   fields?: FieldDefinition[];
+  views?: View[];
   tasks: Task[];
   [key: string]: unknown;
 }
@@ -332,6 +356,18 @@ const optionSchema = z.looseObject({
   category: z.string().min(1).exactOptional(),
 });
 
+const viewSchema = z.looseObject({
+  ...synced,
+  title: z.string(),
+  type: z.string().min(1, "expected a view type like board"),
+  groupBy: z.string().exactOptional(),
+  sortBy: z.string().exactOptional(),
+  sortDescending: z.boolean().exactOptional(),
+  listIds: z.array(id).exactOptional(),
+  openOnly: z.boolean().exactOptional(),
+  scale: z.string().exactOptional(),
+});
+
 const fieldSchema = z.looseObject({
   id,
   title: z.string().exactOptional(),
@@ -387,6 +423,7 @@ const taskSchema = z.looseObject({
   recurrence: recurrenceSchema.exactOptional(),
   excludedDates: z.array(local).exactOptional(),
   completedAt: utc.exactOptional(),
+  starred: z.boolean().exactOptional(),
   values: z
     .record(
       z.string(),
@@ -403,6 +440,7 @@ export const documentSchema: z.ZodType<TaskDocument> = z
     version: z.string().regex(/^1\.\d+$/, "unsupported version; this library reads 1.x"),
     lists: z.array(listSchema).exactOptional(),
     fields: z.array(fieldSchema).exactOptional(),
+    views: z.array(viewSchema).exactOptional(),
     tasks: z.array(taskSchema),
   })
   .superRefine((doc, ctx) =>
@@ -473,6 +511,47 @@ function checkDocument(doc: TaskDocument, issue: Report): void {
     issue,
   );
   checkAcyclic(tasks, (t) => t.dependsOn ?? [], ["tasks"], "dependsOn", issue);
+
+  const views = doc.views ?? [];
+  checkUnique(views, ["views"], issue);
+  views.forEach((v, i) => {
+    for (const use of VIEW_KEYS) {
+      const key = v[use];
+      const error = key === undefined ? undefined : viewKeyError(key, use, fields);
+      if (error) issue(["views", i, use], error);
+    }
+    v.listIds?.forEach((l, j) => {
+      if (!listIds.has(l)) issue(["views", i, "listIds", j], `unknown list "${l}"`);
+    });
+  });
+}
+
+export const VIEW_KEYS = ["groupBy", "sortBy"] as const;
+const SORT_KEYS = ["title", "start", "end", "due", "completedAt", "updatedAt", "starred"];
+
+/** Why `key` can't be a view's `groupBy` or `sortBy`, or undefined when it can. */
+export function viewKeyError(
+  key: string,
+  use: (typeof VIEW_KEYS)[number],
+  fields: Record<string, ResolvedField>,
+): string | undefined {
+  if (key.startsWith("values.")) {
+    const fieldId = key.slice("values.".length);
+    const field = fields[fieldId];
+    if (!field) return `unknown field "${fieldId}"; define it in "fields"`;
+    if (use === "groupBy" && !["select", "multiSelect", "boolean"].includes(field.type))
+      return `can't group by a ${field.type} field; use a select, multiSelect or boolean one`;
+    if (use === "sortBy" && field.type === "multiSelect")
+      return "can't sort by a multiSelect field";
+    return undefined;
+  }
+  if (use === "groupBy")
+    return key === "listId" || key === "starred"
+      ? undefined
+      : "expected listId, starred or values.<field id>";
+  return SORT_KEYS.includes(key)
+    ? undefined
+    : `expected one of: ${SORT_KEYS.join(", ")}, or values.<field id>`;
 }
 
 function checkUnique(items: readonly { id: string }[], path: Path, issue: Report): void {

@@ -1,6 +1,5 @@
 import { parse as parseToml, stringify as stringifyToml, TomlDate } from "smol-toml";
-import { load as loadYaml } from "js-yaml";
-import { stringify as stringifyYaml } from "yaml";
+import { dump as dumpYaml, load as loadYaml } from "js-yaml";
 import type * as z from "zod";
 import { documentSchema, type TaskDocument } from "./schema";
 
@@ -107,12 +106,9 @@ export function encode(data: unknown, format: Format): string {
     case "json":
       return `${JSON.stringify(data, null, 2)}\n`;
     case "yaml":
-      // Quote any string a YAML 1.1 reader (`yes`, `2026-11-12`) or a 1.2 core reader (`0o17`) would turn into
-      // another type: 1.1 rules plus the 1.2 core number tags.
-      return stringifyYaml(data, {
-        version: "1.1",
-        customTags: ["intOct", "intHex", "int", "floatExp", "floatNaN", "float"],
-      });
+      // js-yaml quotes any string a YAML 1.1 reader (`yes`, `2026-11-12`) or a 1.2 core reader (`0o17`) would read
+      // as another type; the tests read its output back with both.
+      return dumpYaml(data, { lineWidth: -1, noRefs: true, quoteStyle: "double" });
     case "toml": {
       // smol-toml silently drops nulls; unknown keys from JSON input may hold them.
       const path = findNull(data, []);

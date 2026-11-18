@@ -6,8 +6,8 @@ A task's kind comes from its time fields, never a type field: `start` plus `end`
 
 ## Rules for writing documents
 
-- Top level: `{ version: "1.0", lists?: List[], fields?: FieldDefinition[], tasks: Task[] }`.
-- Every task, list, custom field and field option needs `id` (UUID recommended) and `updatedAt`. Set `updatedAt` to the current UTC time on every change.
+- Top level: `{ version: "1.1", lists?: List[], fields?: FieldDefinition[], views?: View[], tasks: Task[] }`.
+- Every task, list, view, custom field and field option needs `id` (UUID recommended) and `updatedAt`. Set `updatedAt` to the current UTC time on every change.
 - Delete by setting `deletedAt` (UTC); never remove a record that others may reference.
 - Time formats:
   - `start`, `end`, `due`, `until` and `excludedDates` are local: `2026-11-12` (all-day) or `2026-11-12T09:30` (wall clock in `timeZone`; floating without one). Never put an offset or `Z` on these.
@@ -22,6 +22,8 @@ A task's kind comes from its time fields, never a type field: `start` plus `end`
   - Built-ins: `status: todo|doing|done|cancelled`, `priority: low|medium|high`, `tags: string[]`, `progress: 0–100`, `location: string`.
   - A custom field or custom option must be defined under `fields` before use. A custom status option maps to a built-in category: `{ id: shipped, title: Shipped, category: done, updatedAt }`.
 - Colors are `#rrggbb`.
+- `task.starred: boolean` marks a task to stand out (a star or flag).
+- Views (synced records like tasks): `{ id, title, type: list|board|calendar|timeline|table, groupBy?, sortBy?, sortDescending?, listIds?, openOnly?, scale?: day|week|month, updatedAt }`. `groupBy` is `listId`, `starred` or `values.<id>` of a select, multiSelect or boolean field; `sortBy` is `title`, `start`, `end`, `due`, `completedAt`, `updatedAt`, `starred` or `values.<id>` of any non-multiSelect field. Put app-specific view settings on the view as extra keys.
 - Unknown keys anywhere are kept, except inside `recurrence`, where they're an error.
 
 ## Rules for writing code
@@ -29,6 +31,7 @@ A task's kind comes from its time fields, never a type field: `start` plus `end`
 - Dates are strings throughout; the library never returns `Date` objects.
 - `parse`, `stringify`, `validate`, `parseMarkdown`, `stringifyMarkdown`, `toICS` and `fromICS` throw `TasksFormatError` (`.issues: { path, message }[]`; `.message` is ready to show). `isTaskFile` never throws.
 - Resolve `const fields = resolveFields(doc)` once, then use the helpers instead of comparing ids, because custom options like `shipped` mean `done`. The helpers: `statusOf(task, fields)` (todo|doing|done|cancelled), `priorityOf`, `isComplete`, `isOpen` (not deleted, todo or doing), `isOverdue(task, fields, { now?, timeZone? })` and `blockers(task, doc.tasks, fields)`. For other fields, read `fields[id].options` and each option's `.category`.
+- To show a view, `viewTasks(doc, view, fields)` returns its tasks filtered and sorted; draw the groups yourself.
 - To draw a calendar or timeline, call `occurrences(task, { from, to, timeZone? })` for each task (`to` is exclusive). Don't expand recurrence by hand.
 - To complete a task, use `completeTask(task, new Date().toISOString())`. It returns a new task: repeating tasks move to their next occurrence, everything else becomes `status: done`. Don't move recurring dates by hand.
 - For sync, call `merge(local, remote)`. It returns `{ document, repairs }`; show `repairs` to the user.

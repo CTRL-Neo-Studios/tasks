@@ -16,14 +16,23 @@ ESM only. Node ≥ 20.19, Bun, Deno, browsers.
 ## The format in one minute
 
 ```yaml
-version: "1.0"
+version: "1.1"
 lists:
   - { id: work, title: Work, color: "#3b82f6", updatedAt: 2026-11-09T10:00:00Z }
+views:
+  - {
+      id: board,
+      title: Board,
+      type: board,
+      groupBy: values.status,
+      updatedAt: 2026-11-09T10:00:00Z,
+    }
 tasks:
   - id: invoice # a todo: no start
     title: Ship invoice
     listId: work
     due: 2026-11-12
+    starred: true
     values: { status: doing, priority: high, tags: [billing] }
     updatedAt: 2026-11-09T10:00:00Z
   - id: standup # an event: start + duration, repeating
@@ -82,7 +91,7 @@ const task: Task = {
   due: "2026-11-12",
   updatedAt: now,
 };
-const doc: TaskDocument = validate({ version: "1.0", tasks: [task] });
+const doc: TaskDocument = validate({ version: "1.1", tasks: [task] });
 
 // Deleting: keep the record and mark it, so references and sync still work.
 Object.assign(doc.tasks[0]!, { deletedAt: now, updatedAt: now });
@@ -124,6 +133,19 @@ fields:
   - id: status
     options: [{ id: shipped, title: "Shipped 🚀", category: done, updatedAt: 2026-11-09T10:00:00Z }]
   - { id: estimate, title: Estimate (h), type: number, min: 0, updatedAt: 2026-11-09T10:00:00Z }
+```
+
+## Views: boards, lists and calendars saved in the file
+
+A document can keep its views, so every app that opens it shows the same board. A view has a `type` (`list`, `board`, `calendar`, `timeline`, `table`), and optionally `groupBy`, `sortBy`, `sortDescending`, `listIds`, `openOnly` and `scale`. Group and sort keys are task keys (`listId`, `due`, `starred`…) or `values.<field id>`. An app keeps its own settings for a view on it as extra keys.
+
+```ts
+import { resolveFields, viewTasks } from "@type32/tasks";
+
+const fields = resolveFields(doc);
+for (const view of doc.views ?? []) {
+  const tasks = viewTasks(doc, view, fields); // filtered and sorted as the view says; grouping is yours to draw
+}
 ```
 
 ## Calendar views: occurrences in a range
@@ -168,7 +190,7 @@ save(document);
 for (const r of repairs) notify(r.message); // e.g. a value dropped because its field changed type
 ```
 
-- **Matching:** records (lists, tasks, custom fields, each option) match by `id`, and the later `updatedAt` wins.
+- **Matching:** records (lists, views, tasks, custom fields, each option) match by `id`, and the later `updatedAt` wins.
 - **Repairs:** two edits that are each valid can still conflict, like two devices moving tasks under each other. `merge` repairs the result so it stays valid, and lists every change in `repairs`, including what was removed.
 - **Order:** record order is not synced.
 
@@ -250,6 +272,7 @@ Import never guesses. Anything the format can't represent is dropped and listed,
 | `resolveFields(doc): Record<string, ResolvedField>`                       | Built-in and custom fields with their options and categories                                        |
 | `kindOf(task): "span" \| "moment" \| "todo"`                              | How to draw a task                                                                                  |
 | `statusOf`, `priorityOf`, `isComplete`, `isOpen`, `isOverdue`, `blockers` | What a task's values mean, given `resolveFields(doc)`. See "Statuses, priorities and custom fields" |
+| `viewTasks(doc, view, fields): Task[]`                                    | A view's tasks, filtered and sorted                                                                 |
 | `occurrences(task, { from, to, timeZone? }): Occurrence[]`                | Occurrences overlapping `[from, to)`                                                                |
 | `completeTask(task, completedAt): Task`                                   | Mark done, or move a repeating task to its next occurrence                                          |
 | `merge(a, b): { document, repairs }`                                      | Combine two copies for sync                                                                         |

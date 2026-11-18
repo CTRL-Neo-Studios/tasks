@@ -19,6 +19,7 @@ export {
   type Task,
   type TaskDocument,
   type UTCDateTime,
+  type View,
   type Weekday,
 } from "./schema";
 export { type Format, type Issue, parse, stringify, TasksFormatError, validate } from "./parse";
@@ -38,3 +39,4 @@ export {
   type TaskPriority,
   type TaskStatus,
 } from "./predicates";
+export { viewTasks } from "./views";

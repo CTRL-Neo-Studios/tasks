@@ -529,6 +529,54 @@
     tasks: []
   issues: [[fields, 0, options, 1, id]]
 
+# --- Views ---
+- name: view without type and title
+  format: yaml
+  input: |
+    version: "1.1"
+    views: [{ id: v, updatedAt: 2026-11-09T10:00:00Z }]
+    tasks: []
+  issues: [[views, 0, title], [views, 0, type]]
+- name: duplicate view id
+  format: yaml
+  input: |
+    version: "1.1"
+    views:
+      - { id: v, title: A, type: list, updatedAt: 2026-11-09T10:00:00Z }
+      - { id: v, title: B, type: board, updatedAt: 2026-11-09T10:00:00Z }
+    tasks: []
+  issues: [[views, 1, id]]
+- name: view grouped by a text field, sorted by a multiSelect
+  format: yaml
+  input: |
+    version: "1.1"
+    views:
+      - { id: v, title: V, type: board, groupBy: values.location, sortBy: values.tags, updatedAt: 2026-11-09T10:00:00Z }
+    tasks: []
+  issues: [[views, 0, groupBy], [views, 0, sortBy]]
+- name: view keys that aren't task keys or values paths
+  format: yaml
+  input: |
+    version: "1.1"
+    views:
+      - { id: v, title: V, type: board, groupBy: status, sortBy: notes, updatedAt: 2026-11-09T10:00:00Z }
+    tasks: []
+  issues: [[views, 0, groupBy], [views, 0, sortBy]]
+- name: view of an undefined field and an unknown list
+  format: yaml
+  input: |
+    version: "1.1"
+    views:
+      - { id: v, title: V, type: list, sortBy: values.stage, listIds: [nope], updatedAt: 2026-11-09T10:00:00Z }
+    tasks: []
+  issues: [[views, 0, sortBy], [views, 0, listIds, 0]]
+- name: starred that isn't a boolean
+  format: yaml
+  input: |
+    version: "1.1"
+    tasks: [{ id: a, title: A, starred: "yes", updatedAt: 2026-11-09T10:00:00Z }]
+  issues: [[tasks, 0, starred]]
+
 # --- Markdown task files ---
 - name: markdown without frontmatter
   format: markdown
