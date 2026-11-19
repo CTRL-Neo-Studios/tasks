@@ -65,6 +65,8 @@ export interface View extends Synced {
   openOnly?: boolean;
   /** Calendar: the period a page shows. Timeline: the period a column stands for. `day`, `week` or `month`; apps use their default for one they don't know. */
   scale?: string;
+  /** Timeline: pixels a day, for an app that zooms freely; `scale` is then the preset nearest it. Positive. */
+  zoom?: number;
 }
 
 /** A choice of a select field. Each option is its own synced record. */
@@ -79,7 +81,7 @@ export interface FieldOption extends Synced {
 
 /**
  * A custom field, or options added to a built-in one.
- * Built-in ids (`status`, `priority`, `tags`, `progress`, `location`) only take `options`;
+ * Built-in ids (`status`, `priority`, `tags`, `progress`, `location`, `assignees`) only take `options`;
  * custom fields need `title`, `type`, `updatedAt`.
  */
 export interface FieldDefinition {
@@ -144,8 +146,10 @@ export interface Task extends Synced {
   completedAt?: UTCDateTime;
   /** Marked to stand out (a star or a flag). */
   starred?: boolean;
+  /** `#rrggbb`: how apps draw the task. Absent: its list's colour, then the app's. */
+  color?: string;
   /**
-   * Field id → value, built-in (`status`, `priority`, `tags`, `progress`, `location`) and custom alike.
+   * Field id → value, built-in (`status`, `priority`, `tags`, `progress`, `location`, `assignees`) and custom alike.
    * A key must name a field; a select value must be an option id. Read meanings with `resolveFields()`.
    */
   values?: Record<string, FieldValue>;
@@ -153,7 +157,7 @@ export interface Task extends Synced {
 
 /** A whole file: lists, field definitions, views and tasks. */
 export interface TaskDocument {
-  /** `"1.1"`; readers accept any `1.x`. */
+  /** `"1.2"`; readers accept any `1.x`. */
   version: string;
   lists?: List[];
   fields?: FieldDefinition[];
@@ -232,6 +236,8 @@ const BUILT_IN_FIELDS: Record<string, ResolvedField> = Object.assign(Object.crea
   tags: builtIn("tags", "Tags", "multiSelect", { open: true }),
   progress: builtIn("progress", "Progress", "number", { min: 0, max: 100 }),
   location: builtIn("location", "Location", "text"),
+  // The people a task is for: the document lists them as options (`title` a name, `color`), so they sync like tags.
+  assignees: builtIn("assignees", "Assignees", "multiSelect"),
 });
 
 /** Built-in fields merged with the document's `fields`. Deleted fields and options stay, flagged `deleted`. */
@@ -366,6 +372,7 @@ const viewSchema = z.looseObject({
   listIds: z.array(id).exactOptional(),
   openOnly: z.boolean().exactOptional(),
   scale: z.string().exactOptional(),
+  zoom: z.number().positive("expected a positive number of pixels a day").exactOptional(),
 });
 
 const fieldSchema = z.looseObject({
@@ -424,6 +431,7 @@ const taskSchema = z.looseObject({
   excludedDates: z.array(local).exactOptional(),
   completedAt: utc.exactOptional(),
   starred: z.boolean().exactOptional(),
+  color: color.exactOptional(),
   values: z
     .record(
       z.string(),

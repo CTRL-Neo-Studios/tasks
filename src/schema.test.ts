@@ -115,6 +115,13 @@ describe("rejects", () => {
     ],
     ["offset as time zone", (d) => (task(d).timeZone = "+01:00"), "tasks.1.timeZone:"],
     ["bad color", (d) => (d.lists![0]!.color = "red"), "lists.0.color: expected a #rrggbb color"],
+    ["bad task color", (d) => (task(d).color = "#fff"), "tasks.1.color: expected a #rrggbb color"],
+    [
+      "assignee who isn't an option",
+      (d) => (task(d).values = { assignees: ["ada"] }),
+      'unknown option "ada" for field "assignees"',
+    ],
+    ["zoom of zero", (d) => (d.views![0]!.zoom = 0), "views.0.zoom: expected a positive number"],
     [
       "end and duration",
       (d) => (task(d).end = "2026-11-10T10:00"),

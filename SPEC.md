@@ -1,4 +1,4 @@
-# Tasks format 1.1
+# Tasks format 1.2
 
 One document format for todos, calendar events and timelines. A todo, an event and a timeline bar are the same object, a **task**; which one it is depends only on which time fields it has. Field names and meanings follow [JSCalendar (RFC 8984)](https://www.rfc-editor.org/rfc/rfc8984) where they overlap, so conversion stays mechanical.
 
@@ -7,7 +7,7 @@ A document can be written as JSON, YAML or TOML; the data model is identical. Ev
 ## Document
 
 ```yaml
-version: "1.1"
+version: "1.2"
 lists: [] # optional
 fields: [] # optional
 views: [] # optional
@@ -93,6 +93,7 @@ A saved way of showing the tasks, so every app that opens the document shows the
 | `listIds`        | Id[]    | Only tasks in these lists or lists nested in them. Each must name a list. Absent: every task.                                                                            |
 | `openOnly`       | boolean | Only open tasks: status `todo` or `doing`.                                                                                                                               |
 | `scale`          | string  | Calendar: the period a page shows. Timeline: the period a column stands for. `day`, `week` or `month`; an app uses its default for a value it doesn't know.              |
+| `zoom`           | number  | Timeline: pixels a day, positive, for an app that zooms freely (1.2). It keeps `scale` at the preset nearest it, for apps that only know those.                          |
 
 A view never shows deleted tasks. Sorting:
 
@@ -118,6 +119,7 @@ A view never shows deleted tasks. Sorting:
 | `excludedDates` | (LocalDate \| LocalDateTime)[] | Occurrences to skip. Needs `recurrence`; same form as the anchor.                                                                                                                            |
 | `completedAt`   | UTCDateTime                    |                                                                                                                                                                                              |
 | `starred`       | boolean                        | Marked to stand out (a star or a flag).                                                                                                                                                      |
+| `color`         | Color                          | How apps draw the task (1.2). Absent: its list's `color`, then the app's own.                                                                                                                |
 | `values`        | object                         | Field id → value. See [Fields](#fields).                                                                                                                                                     |
 
 ### Kind
@@ -224,13 +226,16 @@ Every option merges on its own, so two devices adding options at the same time b
 
 Always present. A document may list a built-in field only to add options to it, or to change a built-in option's `title` and `color` by reusing its id. Its type, categories and other settings are locked, built-in options keep their category and can't be deleted.
 
-| Id         | Type        | Categories                  | Options                    |
-| ---------- | ----------- | --------------------------- | -------------------------- |
-| `status`   | select      | `todo doing done cancelled` | one per category, same ids |
-| `priority` | select      | `low medium high`           | one per category, same ids |
-| `tags`     | multiSelect | none, `open`                | none                       |
-| `progress` | number      | 0–100                       |                            |
-| `location` | text        |                             |                            |
+| Id          | Type        | Categories                  | Options                    |
+| ----------- | ----------- | --------------------------- | -------------------------- |
+| `status`    | select      | `todo doing done cancelled` | one per category, same ids |
+| `priority`  | select      | `low medium high`           | one per category, same ids |
+| `tags`      | multiSelect | none, `open`                | none                       |
+| `progress`  | number      | 0–100                       |                            |
+| `location`  | text        |                             |                            |
+| `assignees` | multiSelect | none                        | none: the people (1.2)     |
+
+`assignees` (1.2) lists the people a task is for. Its options are the people: `title` their name, `color` the colour apps draw them in, and any extra keys an app keeps (an `email`, for iCalendar). Values must be option ids, so a person is renamed once for every task. A 1.0 or 1.1 document that has a custom field named `assignees` must rename it before it's read as 1.2.
 
 Built-in categories are what other apps rely on: any app knows a task with status `shipped` is done because `shipped` maps to `done`. A task without a status counts as `todo`.
 
@@ -264,32 +269,33 @@ Informative. How `toICS`/`fromICS` map to RFC 5545; other implementations should
 
 A task exports as a **VEVENT** when it has `start`, no `due`, and no status other than `cancelled`; otherwise as a **VTODO**. Deleted tasks are skipped.
 
-| Task                                | iCalendar                                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `id`                                | `UID`                                                                                                        |
-| `updatedAt`                         | `LAST-MODIFIED` and `DTSTAMP`. Import prefers `LAST-MODIFIED`; neither → `1970-01-01T00:00:00Z`              |
-| `title`, `notes`, `values.location` | `SUMMARY`, `DESCRIPTION`, `LOCATION`                                                                         |
-| `start`, `due`                      | `DTSTART`, `DUE`, with `VALUE=DATE` for dates and `TZID=<IANA>` from `timeZone`. `timeZone: UTC` writes `…Z` |
-| `end`                               | VEVENT `DTEND`, one day later for dates (iCalendar ends are exclusive). VTODO: `DURATION`                    |
-| `duration`                          | `DURATION`                                                                                                   |
-| status category                     | `STATUS`: todo `NEEDS-ACTION`, doing `IN-PROCESS`, done `COMPLETED`, cancelled `CANCELLED`                   |
-| priority category                   | `PRIORITY`: high 1, medium 5, low 9. Import: 1–4 high, 5 medium, 6–9 low                                     |
-| `values.progress`, `completedAt`    | VTODO `PERCENT-COMPLETE`, `COMPLETED`                                                                        |
-| `values.tags`                       | `CATEGORIES`                                                                                                 |
-| `parentId`                          | `RELATED-TO;RELTYPE=PARENT` (the default `RELTYPE`)                                                          |
-| `dependsOn`                         | `RELATED-TO;RELTYPE=DEPENDS-ON` (RFC 9253). Import also reads `FINISHTOSTART` from the predecessor           |
-| `recurrence`, `excludedDates`       | `RRULE`, `EXDATE`. `UNTIL` is written in UTC when the task has a time zone                                   |
+| Task                                | iCalendar                                                                                                                                                                                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                | `UID`                                                                                                                                                                                                                                                                         |
+| `updatedAt`                         | `LAST-MODIFIED` and `DTSTAMP`. Import prefers `LAST-MODIFIED`; neither → `1970-01-01T00:00:00Z`                                                                                                                                                                               |
+| `title`, `notes`, `values.location` | `SUMMARY`, `DESCRIPTION`, `LOCATION`                                                                                                                                                                                                                                          |
+| `start`, `due`                      | `DTSTART`, `DUE`, with `VALUE=DATE` for dates and `TZID=<IANA>` from `timeZone`. `timeZone: UTC` writes `…Z`                                                                                                                                                                  |
+| `end`                               | VEVENT `DTEND`, one day later for dates (iCalendar ends are exclusive). VTODO: `DURATION`                                                                                                                                                                                     |
+| `duration`                          | `DURATION`                                                                                                                                                                                                                                                                    |
+| status category                     | `STATUS`: todo `NEEDS-ACTION`, doing `IN-PROCESS`, done `COMPLETED`, cancelled `CANCELLED`                                                                                                                                                                                    |
+| priority category                   | `PRIORITY`: high 1, medium 5, low 9. Import: 1–4 high, 5 medium, 6–9 low                                                                                                                                                                                                      |
+| `values.progress`, `completedAt`    | VTODO `PERCENT-COMPLETE`, `COMPLETED`                                                                                                                                                                                                                                         |
+| `values.tags`                       | `CATEGORIES`                                                                                                                                                                                                                                                                  |
+| `values.assignees`                  | `ATTENDEE;CN=<title>;X-TASKS-ID=<id>`, at `mailto:<email>` when the option has an `email`, else at `urn:x-tasks:assignee:<id>`. Import: the option is `X-TASKS-ID`, else the id in that URI, else the email, else `CN`; options are added to the document's `assignees` field |
+| `parentId`                          | `RELATED-TO;RELTYPE=PARENT` (the default `RELTYPE`)                                                                                                                                                                                                                           |
+| `dependsOn`                         | `RELATED-TO;RELTYPE=DEPENDS-ON` (RFC 9253). Import also reads `FINISHTOSTART` from the predecessor                                                                                                                                                                            |
+| `recurrence`, `excludedDates`       | `RRULE`, `EXDATE`. `UNTIL` is written in UTC when the task has a time zone                                                                                                                                                                                                    |
 
 Time zones are referenced by IANA name without `VTIMEZONE` blocks (RFC 7809). On import, every time is converted to the zone of `DTSTART` (or `DUE`).
 
-**Lost on export:** lists, views, custom fields, custom status and priority options (exported as their category), `starred`, unknown keys, deleted tasks.
+**Lost on export:** lists, views, custom fields, custom status and priority options (exported as their category), `starred`, `color`, unknown keys, deleted tasks.
 
 **Dropped on import, and reported:**
 
 - whole components: `RRULE` parts other than `FREQ` (daily to yearly), `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, and `WKST` (`WKST` is dropped only where it changes results); changed occurrences (`RECURRENCE-ID`); TZIDs that aren't IANA names; components that break a rule of this spec
 - single properties: `RDATE`, and relations to tasks not in the file
 
-Ignored on import: alarms, attendees, and other properties without a counterpart.
+Ignored on import: alarms, attendees' roles and replies, and other properties without a counterpart.
 
 ## Validity
 

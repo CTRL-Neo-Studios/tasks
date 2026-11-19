@@ -1,6 +1,7 @@
 import { Temporal } from "temporal-polyfill";
 import { type Issue, TasksFormatError, validate } from "./parse";
 import {
+  type FieldDefinition,
   type FieldValue,
   type Recurrence,
   resolveFields,
@@ -38,6 +39,17 @@ export function toICS(doc: TaskDocument): string {
   const fields = resolveFields(valid);
   const category = (fieldId: string, value: FieldValue | undefined): string | undefined =>
     fields[fieldId]!.options.find((o) => o.id === value)?.category;
+  // Assignees as attendees: an option's `email` (an extra key) is its address, else a URI that names the option.
+  const people = new Map(
+    (valid.fields?.find((f) => f.id === "assignees")?.options ?? []).map((o) => [o.id, o]),
+  );
+  const attendee = (id: string): string => {
+    const name = fields["assignees"]!.options.find((o) => o.id === id)?.title ?? id;
+    const email = people.get(id)?.["email"];
+    const address =
+      typeof email === "string" ? `mailto:${email}` : `${ASSIGNEE_URI}${encodeURIComponent(id)}`;
+    return `ATTENDEE;CN="${name.replace(/["\r\n]/g, "'")}";X-TASKS-ID="${id.replace(/["\r\n]/g, "")}":${address}`;
+  };
 
   const lines = [
     "BEGIN:VCALENDAR",
@@ -91,6 +103,8 @@ export function toICS(doc: TaskDocument): string {
     const tags = values["tags"];
     if (Array.isArray(tags) && tags.length > 0)
       lines.push(`CATEGORIES:${tags.map(escape).join(",")}`);
+    const assignees = values["assignees"];
+    if (Array.isArray(assignees)) for (const id of assignees) lines.push(attendee(id));
     if (t.parentId !== undefined) lines.push(`RELATED-TO;RELTYPE=PARENT:${escape(t.parentId)}`);
     for (const id of t.dependsOn ?? []) lines.push(`RELATED-TO;RELTYPE=DEPENDS-ON:${escape(id)}`);
     if (t.recurrence) lines.push(`RRULE:${rrule(t.recurrence, zone)}`);
@@ -185,12 +199,13 @@ export function fromICS(text: string): ImportResult {
   const dropped: Issue[] = [];
   const tasks: Task[] = [];
   const successors: [before: string, after: string][] = [];
+  const people = new Map<string, Person>();
   readComponents(text).forEach((c, n) => {
     const uid = c.props.find((p) => p.name === "UID")?.value;
     try {
       if (uid === undefined) throw new Skip(`${c.type} without UID`);
       if (tasks.some((t) => t.id === uid)) throw new Skip("duplicate UID");
-      tasks.push(toTask(c, uid, dropped, successors));
+      tasks.push(toTask(c, uid, dropped, successors, people));
     } catch (error) {
       if (!(error instanceof Skip || error instanceof RangeError)) throw error;
       dropped.push({ path: [uid ?? `${c.type} #${n + 1}`], message: error.message });
@@ -200,7 +215,13 @@ export function fromICS(text: string): ImportResult {
     const task = tasks.find((t) => t.id === after);
     if (task) task.dependsOn = [...new Set([...(task.dependsOn ?? []), before])];
   }
-  return { document: settle({ version: "1.0", tasks }, dropped), dropped };
+  const fields: FieldDefinition[] = people.size
+    ? [{ id: "assignees", options: [...people].map(([id, p]) => ({ id, updatedAt: EPOCH, ...p })) }]
+    : [];
+  return {
+    document: settle({ version: "1.0", ...(fields.length > 0 && { fields }), tasks }, dropped),
+    dropped,
+  };
 }
 
 /** Removes references to tasks that weren't imported and tasks that still break a rule, until the document validates. */
@@ -244,7 +265,34 @@ function settle(doc: TaskDocument, dropped: Issue[]): TaskDocument {
   }
 }
 
-function toTask(c: Component, uid: string, dropped: Issue[], successors: [string, string][]): Task {
+/** An attendee read as an assignee: its name, and its address when it's an email. */
+interface Person {
+  title: string;
+  email?: string;
+}
+
+/** An attendee's address for an assignee without an email, so it comes back as the same option. */
+const ASSIGNEE_URI = "urn:x-tasks:assignee:";
+
+/** The option for an attendee: the id we wrote (`X-TASKS-ID`, or in our URI), else its email, else its name. */
+function personOf(p: Prop): [id: string, person: Person] | undefined {
+  const title = p.params["CN"]?.trim();
+  const address = p.value.trim();
+  const ours = address.toLowerCase().startsWith(ASSIGNEE_URI)
+    ? decodeURIComponent(address.slice(ASSIGNEE_URI.length))
+    : undefined;
+  const email = /^mailto:/i.test(address) ? address.slice(7).toLowerCase() : undefined;
+  const id = p.params["X-TASKS-ID"] || ours || email || title;
+  return id ? [id, { title: title || id, ...(email && { email }) }] : undefined;
+}
+
+function toTask(
+  c: Component,
+  uid: string,
+  dropped: Issue[],
+  successors: [string, string][],
+  people: Map<string, Person>,
+): Task {
   const all = (name: string): Prop[] => c.props.filter((p) => p.name === name);
   const one = (name: string): Prop | undefined => c.props.find((p) => p.name === name);
   if (one("RECURRENCE-ID"))
@@ -303,6 +351,14 @@ function toTask(c: Component, uid: string, dropped: Issue[], successors: [string
     ),
   ].filter(Boolean);
   if (tags.length > 0) values["tags"] = tags;
+  const assignees = new Set<string>();
+  for (const p of all("ATTENDEE")) {
+    const found = personOf(p);
+    if (!found) continue;
+    if (!people.has(found[0])) people.set(...found);
+    assignees.add(found[0]);
+  }
+  if (assignees.size > 0) values["assignees"] = [...assignees];
   if (Object.keys(values).length > 0) task.values = values;
 
   for (const p of all("RELATED-TO")) {

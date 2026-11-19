@@ -22,8 +22,9 @@ A task's kind comes from its time fields, never a type field: `start` plus `end`
   - Built-ins: `status: todo|doing|done|cancelled`, `priority: low|medium|high`, `tags: string[]`, `progress: 0–100`, `location: string`.
   - A custom field or custom option must be defined under `fields` before use. A custom status option maps to a built-in category: `{ id: shipped, title: Shipped, category: done, updatedAt }`.
 - Colors are `#rrggbb`.
-- `task.starred: boolean` marks a task to stand out (a star or flag).
-- Views (synced records like tasks): `{ id, title, type: list|board|calendar|timeline|table, groupBy?, sortBy?, sortDescending?, listIds?, openOnly?, scale?: day|week|month, updatedAt }`. `groupBy` is `listId`, `starred` or `values.<id>` of a select, multiSelect or boolean field; `sortBy` is `title`, `start`, `end`, `due`, `completedAt`, `updatedAt`, `starred` or `values.<id>` of any non-multiSelect field. Put app-specific view settings on the view as extra keys.
+- `task.starred: boolean` marks a task to stand out (a star or flag). `task.color: "#rrggbb"` is how apps draw it (absent: its list's colour).
+- `values.assignees` (built-in multiSelect) holds option ids: the people are the field's options (`fields: [{ id: assignees, options: [{ id, title, color?, updatedAt }] }]`).
+- Views (synced records like tasks): `{ id, title, type: list|board|calendar|timeline|table, groupBy?, sortBy?, sortDescending?, listIds?, openOnly?, scale?: day|week|month, zoom?: number (timeline px a day), updatedAt }`. `groupBy` is `listId`, `starred` or `values.<id>` of a select, multiSelect or boolean field; `sortBy` is `title`, `start`, `end`, `due`, `completedAt`, `updatedAt`, `starred` or `values.<id>` of any non-multiSelect field. Put app-specific view settings on the view as extra keys.
 - Unknown keys anywhere are kept, except inside `recurrence`, where they're an error.
 
 ## Rules for writing code

@@ -170,3 +170,38 @@ test("all-day ends turn inclusive", () => {
 test("text that isn't iCalendar is a TasksFormatError", () => {
   expect(() => fromICS("hello")).toThrow(TasksFormatError);
 });
+
+test("assignees go out as attendees and come back as the same options", () => {
+  const people: TaskDocument = {
+    version: "1.2",
+    fields: [
+      {
+        id: "assignees",
+        options: [
+          { id: "ada", title: 'Ada "A" Lovelace', updatedAt: at },
+          { id: "bob", title: "Bob", email: "Bob@example.com", updatedAt: at },
+        ],
+      },
+    ],
+    tasks: [{ id: "t", title: "Pair", values: { assignees: ["ada", "bob"] }, updatedAt: at }],
+  };
+  const ics = toICS(people);
+  expect(ics).toContain(`ATTENDEE;CN="Ada 'A' Lovelace";X-TASKS-ID="ada":urn:x-tasks:assignee:ada`);
+  expect(ics).toContain('ATTENDEE;CN="Bob";X-TASKS-ID="bob":mailto:Bob@example.com');
+  const back = fromICS(ics).document;
+  expect(back.tasks[0]!.values?.["assignees"]).toEqual(["ada", "bob"]);
+  expect(back.fields).toEqual([
+    {
+      id: "assignees",
+      options: [
+        { id: "ada", title: "Ada 'A' Lovelace", updatedAt: "1970-01-01T00:00:00Z" },
+        {
+          id: "bob",
+          title: "Bob",
+          email: "bob@example.com",
+          updatedAt: "1970-01-01T00:00:00Z",
+        },
+      ],
+    },
+  ]);
+});

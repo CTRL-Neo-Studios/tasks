@@ -137,7 +137,9 @@ fields:
 
 ## Views: boards, lists and calendars saved in the file
 
-A document can keep its views, so every app that opens it shows the same board. A view has a `type` (`list`, `board`, `calendar`, `timeline`, `table`), and optionally `groupBy`, `sortBy`, `sortDescending`, `listIds`, `openOnly` and `scale`. Group and sort keys are task keys (`listId`, `due`, `starred`…) or `values.<field id>`. An app keeps its own settings for a view on it as extra keys.
+A document can keep its views, so every app that opens it shows the same board. A view has a `type` (`list`, `board`, `calendar`, `timeline`, `table`), and optionally `groupBy`, `sortBy`, `sortDescending`, `listIds`, `openOnly`, `scale` and `zoom` (a timeline's pixels a day). Group and sort keys are task keys (`listId`, `due`, `starred`…) or `values.<field id>`. An app keeps its own settings for a view on it as extra keys.
+
+A task can carry its own `color`, and the built-in `assignees` field lists the people it's for: the document names them as the field's options (`{ id, title, color }`), and `values.assignees` holds their ids. iCalendar maps them to `ATTENDEE`.
 
 ```ts
 import { resolveFields, viewTasks } from "@type32/tasks";
